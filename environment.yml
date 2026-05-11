@@ -50,7 +50,7 @@ dependencies:
 
   # ── pip-only packages ────────────────────────────────────────
   - pip:
-    - pyeit==1.1.0
+    - pyeit>=1.1.2
     - mat73==0.62             # MATLAB v7.3 .mat file reader
     - torch-geometric==2.4.0
     - deepinv==0.1.0
