@@ -1,0 +1,125 @@
+# KTC-Vis .gitignore
+
+# ─────────────────────────────────────────────
+# DATA — Never commit raw data or large caches
+# ─────────────────────────────────────────────
+data/raw/
+data/cache/
+*.mat
+*.h5
+*.hdf5
+
+# ─────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+*.pyo
+*.pyd
+pip-wheel-metadata/
+MANIFEST
+
+# ─────────────────────────────────────────────
+# Virtual environments & Conda
+# ─────────────────────────────────────────────
+.venv/
+venv/
+env/
+.env
+ENV/
+.conda/
+conda-meta/
+
+# ─────────────────────────────────────────────
+# PyTorch / Deep Learning weights
+# (must be downloaded separately per README)
+# ─────────────────────────────────────────────
+data/raw/weights/
+*.pth
+*.pt
+*.ckpt
+*.bin
+
+# ─────────────────────────────────────────────
+# Jupyter Notebooks — outputs only
+# ─────────────────────────────────────────────
+notebooks/.ipynb_checkpoints/
+# Keep .ipynb files but strip outputs via nbstripout
+
+# ─────────────────────────────────────────────
+# Testing & Coverage
+# ─────────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.lcov
+
+# ─────────────────────────────────────────────
+# IDE & Editors
+# ─────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────────────────────
+# Docker
+# ─────────────────────────────────────────────
+.dockerignore
+docker-compose.override.yml
+
+# ─────────────────────────────────────────────
+# Logs & Temporary files
+# ─────────────────────────────────────────────
+logs/
+*.log
+*.tmp
+*.temp
+results/
+
+# ─────────────────────────────────────────────
+# OS & System files
+# ─────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ─────────────────────────────────────────────
+# Config overrides (keep experiment.yaml in git,
+# but not personal overrides)
+# ─────────────────────────────────────────────
+configs/local_*.yaml
+configs/*.local.yaml
+
+# ─────────────────────────────────────────────
+# Documentation builds
+# ─────────────────────────────────────────────
+docs/_build/
+docs/site/
+
+# ─────────────────────────────────────────────
+# Matplotlib figure exports (generated artifacts)
+# ─────────────────────────────────────────────
+figures/
+*.png
+*.pdf
+!docs/**/*.png

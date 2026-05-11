@@ -1,0 +1,1 @@
+"""Algorithm adapter package."""

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: ktc-vis
+          auto-activate-base: false
+          # Skip FEniCS in CI (uses mock adapter for CUQI8 tests)
+          miniforge-variant: Mambaforge
+          use-mamba: true
+
+      - name: Install package in editable mode
+        run: pip install -e . --no-deps
+
+      - name: Lint with flake8
+        run: flake8 ktc_vis/ --max-line-length=100 --ignore=E501,W503
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=ktc_vis \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v \
+            --ignore=tests/test_adapters.py  # Full adapter tests require data; run locally
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
