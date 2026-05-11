@@ -103,7 +103,7 @@ ktc-vis/
 
 ## 3. Task Assignments: Per-File Ownership
 
-### 3.1 Muzammal — EIT & Data Specialist
+### 3.1 Muhammad Muzammal (1541353) — EIT & Data Specialist
 
 **Primary deliverables:**
 
@@ -115,7 +115,14 @@ ktc-vis/
   - `ground_truth`: ndarray (256 × 256) with values {0=water, 1=resistive, 2=conductive}
   - `level`: int 1–7
   - `sample`: str "a" | "b" | "c"
-- Validates electrode subsampling matches the published KTC paper (Level 1 → 2356 meas., Level 7 → 513 meas.).
+- Validates electrode subsampling matches the official KTC dataset exactly:
+  - Level 1: 32 electrodes, 2356 measurements
+  - Level 2: 30 electrodes, 1624 measurements
+  - Level 3: 28 electrodes, 1404 measurements
+  - Level 4: 26 electrodes, 1200 measurements
+  - Level 5: 24 electrodes, 1012 measurements
+  - Level 6: 22 electrodes, 630 measurements
+  - Level 7: 20 electrodes, 513 measurements
 - Unit-tests: `tests/test_loader.py` — test each level/sample produces correct matrix shapes.
 
 #### `ktc_vis/data/subsampler.py`
@@ -242,7 +249,7 @@ ktc-vis/
 
 ---
 
-### 3.4 Shimul Paul — Integration & DevOps Lead
+### 3.4 Shimul Paul (1441927) — Integration & DevOps Lead
 
 **Primary deliverables:**
 
