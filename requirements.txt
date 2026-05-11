@@ -1,0 +1,23 @@
+# KTC-Vis pip requirements (non-FEniCS packages)
+# FEniCS/dolfinx must be installed via Conda: conda install -c conda-forge fenics-dolfinx
+# 
+# Quick install (without FEniCS/Docker, for development):
+#   pip install -r requirements.txt
+
+plotly==5.18.0
+dash==2.14.2
+dash-bootstrap-components==1.5.0
+matplotlib==3.8.2
+numpy==1.26.2
+scipy==1.11.4
+scikit-image==0.22.0
+scikit-learn==1.3.2
+h5py==3.10.0
+torch==2.0.1
+torchvision==0.15.2
+pyyaml==6.0.1
+pytest==7.4.3
+pytest-cov==4.1.0
+tqdm==4.66.1
+mat73==0.62
+pyeit==1.1.0

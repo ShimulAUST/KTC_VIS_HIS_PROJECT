@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────
+# KTC-Vis Master Experiment Configuration
+# All paths are relative to the project root.
+# ─────────────────────────────────────────────────────────────
+
+# ── Data paths ─────────────────────────────────────────────────
+data:
+  raw_dir: "data/raw/ktc2023"          # Directory containing KTC2023 .mat files
+  cache_path: "data/cache/results.h5"  # HDF5 file for caching benchmark results
+  weights:
+    abc1: "data/raw/weights/abc1"       # ABC1 CNN weights from Zenodo
+    pnpe2e: "data/raw/weights/pnpe2e"  # PNPE2E per-level weights
+
+# ── Benchmark scope ────────────────────────────────────────────
+benchmark:
+  algorithms:
+    - abc1
+    - cuqi8
+    - pnpe2e
+
+  levels: [1, 2, 3, 4, 5, 6, 7]       # KTC difficulty levels
+
+  samples:
+    - a
+    - b
+    - c
+
+  # Set to true to skip if a result already exists in the HDF5 cache
+  skip_cached: true
+
+  # Overwrite existing cache entries on re-run
+  overwrite: false
+
+# ── Metrics to compute ─────────────────────────────────────────
+metrics:
+  image_quality:
+    ssim: true                          # SSIM score (official KTC metric)
+    spatial_ssim_map: true              # 256×256 pixel-level quality map
+  shape_matching:
+    hausdorff: true                     # Hausdorff distance (boundary error)
+    position_error: true                # Centroid offset (pixels)
+    resolution: true                    # Smallest detectable inclusion
+  class_specific:
+    per_class_iou: true                 # IoU for water, resistive, conductive
+    confusion_matrix: true              # 3×3 normalized confusion matrix
+  measurement:
+    voltage_residual: true              # Predicted vs. measured voltages
+    resistance_consistency: true        # R=V/I agreement
+  efficiency:
+    runtime: true                       # Wall-clock time per reconstruction (seconds)
+
+# ── Dashboard settings ─────────────────────────────────────────
+dashboard:
+  host: "0.0.0.0"
+  port: 8050
+  debug: false                          # Set true for hot-reload during development
+  title: "KTC-Vis: EIT Algorithm Benchmarking Dashboard"
+
+# ── EIT physical parameters ─────────────────────────────────────
+eit:
+  n_electrodes_full: 32                 # Maximum electrodes (Level 1)
+  n_electrodes_min: 27                  # Minimum electrodes (Level 7)
+  tank_diameter_cm: 23.0
+  image_size: 256                       # Reconstruction output size (pixels)
+  n_classes: 3                          # 0=water, 1=resistive, 2=conductive
+
+# ── Logging ────────────────────────────────────────────────────
+logging:
+  level: "INFO"                         # DEBUG | INFO | WARNING | ERROR
+  log_file: "logs/ktc_vis.log"

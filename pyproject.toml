@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ktc-vis"
+version = "0.1.0"
+description = "Interactive EIT Algorithm Benchmarking Dashboard for KTC2023"
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ktc_vis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+markers = [
+    "requires_data: marks tests that need the KTC2023 dataset downloaded",
+]
+
+[tool.coverage.run]
+source = ["ktc_vis"]
+omit = [
+    "ktc_vis/dashboard/modules/*",  # UI modules tested separately
+]
+
+[tool.flake8]
+max-line-length = 100
+ignore = ["E501", "W503"]
+exclude = [".git", "__pycache__", "build", "dist"]
