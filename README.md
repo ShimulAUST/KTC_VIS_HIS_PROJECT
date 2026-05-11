@@ -1,6 +1,9 @@
 # KTC-Vis: Interactive EIT Algorithm Benchmarking Dashboard
 
 > **Kuopio Tomography Challenge 2023 — Unified Visualization Framework**
+> **Course:** Project HIS
+> **Institution:** Frankfurt University of Applied Sciences, Germany
+> **Guided By:** Prof. Dr. Martin Simon & Emanuele Pepe
 
 KTC-Vis integrates three open-source EIT reconstruction algorithms from KTC2023 — **ABC1**, **CUQI8**, and **PNPE2E** — into a single, reproducible, interactive Plotly Dash dashboard. It connects the physical measurement domain (currents, voltages, resistance) with the image-domain reconstruction quality across all 7 official KTC difficulty levels.
 
@@ -10,16 +13,16 @@ KTC-Vis integrates three open-source EIT reconstruction algorithms from KTC2023 
 
 | Name | Student ID | Role |
 |------|------------|------|
-| Muzammal | — | EIT & Data Specialist / Backend Engineer |
+| Muhammad Muzammal | 1541353 | EIT & Data Specialist / Backend Engineer |
 | Smit Savani | 1420825 | Metrics & Backend Engineer |
 | Asmita Bhuva | 1541650 | Viz & Frontend Developer |
-| Shimul Paul | — | Integration & DevOps Lead |
+| Shimul Paul | 1441927 | Integration & DevOps Lead |
 
 ---
 
 ## Project Goal
 
-There is no open tool that loads all KTC2023 algorithms, runs them on the same data, and interactively compares them side-by-side across all difficulty levels. KTC-Vis fills this gap by providing:
+There is no open tool that loads all KTC2023 algorithms, runs them on the same data, and interactively compares them side-by-side across all difficulty levels. While existing tools like **pyEIT** focus on classical EIT workflows and **OpenEIT** emphasizes live hardware streams, KTC-Vis fills a crucial gap for offline benchmark comparisons by providing:
 
 1. **Reproducibility** — All experiments are defined in a YAML config and cached in HDF5; any run is exactly repeatable.
 2. **Extensibility** — Add a new algorithm by defining one adapter function; add a measurement subset by adding one config line.
@@ -29,25 +32,19 @@ There is no open tool that loads all KTC2023 algorithms, runs them on the same d
 
 ---
 
-## The Three Algorithms
+## Algorithm Comparison at a Glance
 
-### ABC1 — CNN Post-Processing (Federal University of ABC, Brazil)
-- Physics-first: smoothness-prior reconstruction → CNN post-processor removes electrode-gap artifacts.
-- **Strength:** Fast, robust at easy levels (1–3).
-- **Weakness:** Dependent on initial solver quality; ghost inclusions at hard levels.
-- **Repo:** https://github.com/robert-abc/KTC2023-ABC1
-
-### CUQI8 — Level-Set + TV Regularization (Technical University of Denmark)
-- Conductivity defined by two level-set functions → piecewise-constant regions; Complete Electrode Model (CEM) in the loss.
-- **Strength:** High physical interpretability, sharp boundaries, strong at hard levels (5–7).
-- **Weakness:** Computationally expensive; requires FEniCS/dolfinx.
-- **Repo:** https://github.com/CUQI-DTU/KTC2023-CUQI8
-
-### PNPE2E — Hybrid E2E + Plug-and-Play (Santacesaria et al.)
-- Stage 1: 4-scale U-Net maps measurements → raw segmentation. Stage 2: Plug-and-Play Graph U-Net denoiser. Separate weights per level.
-- **Strength:** Difficulty-adaptive; captures non-linearities.
-- **Weakness:** High integration complexity; requires DeepInverse + torch-geometric.
-- **Repo:** https://github.com/msantacesaria/KTC2023_PNPE2E
+| Criterion | ABC1 [9] | CUQI8 [10] | PNPE2E [12] |
+|-----------|----------|------------|-------------|
+| **Approach** | Smoothness prior + CNN repair | Level-set + TV forward model | E2E U-Net + PnP Graph U-Net |
+| **Learning enters** | After physics reconstruction | Never — pure optimization | Before & during refinement |
+| **Neural network** | CNN postprocessor | None | 4-scale U-Net + Graph U-Net |
+| **Uses forward model**| Linearised Jacobian only | Full CEM at every iteration | Via PnP Gauss-Newton step |
+| **Pretrained weights**| CNN weights on Zenodo | None needed | Separate weights per level |
+| **FEniCS needed** | No | Yes (runs in Docker/WSL2) | No |
+| **Strongest at levels**| 1–3 (fast, artefact-clean) | 5–7 (stable, geometry-aware) | All (difficulty-adaptive) |
+| **Expected failure mode**| Ghost inclusions / boundary erosion | Missing inclusion (wrong region count) | Class flip / mask suppression |
+| **Runtime** | Fast | Slow (FEM per iteration) | Medium |
 
 ---
 
@@ -60,12 +57,12 @@ There is no open tool that loads all KTC2023 algorithms, runs them on the same d
 | Level | Electrodes | Measurements |
 |-------|------------|--------------|
 | 1 | 32 | 2356 |
-| 2 | 32 | — |
-| 3 | 31 | — |
-| 4 | 30 | — |
-| 5 | 29 | — |
-| 6 | 28 | — |
-| 7 | 27 | 513 |
+| 2 | 30 | 1624 |
+| 3 | 28 | 1404 |
+| 4 | 26 | 1200 |
+| 5 | 24 | 1012 |
+| 6 | 22 | 630 |
+| 7 | 20 | 513 |
 
 - **Data:** Available on Zenodo (v3 recommended) — doi: 10.5281/zenodo.10986692
 

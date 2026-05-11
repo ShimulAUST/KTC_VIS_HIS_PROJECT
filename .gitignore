@@ -10,6 +10,13 @@ data/cache/
 *.hdf5
 
 # ─────────────────────────────────────────────
+# Proposal & Project Documents (Local only)
+# ─────────────────────────────────────────────
+*proposal*.txt
+*Proposal*.pdf
+PROJECT_HIS_PROPOSAL.pdf
+
+# ─────────────────────────────────────────────
 # Python
 # ─────────────────────────────────────────────
 __pycache__/
