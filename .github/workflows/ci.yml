@@ -24,7 +24,7 @@ jobs:
           activate-environment: ktc-vis
           auto-activate-base: false
           # Skip FEniCS in CI (uses mock adapter for CUQI8 tests)
-          miniforge-variant: Mambaforge
+          miniforge-variant: Miniforge3
           use-mamba: true
 
       - name: Install package in editable mode
