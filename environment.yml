@@ -30,8 +30,9 @@ dependencies:
   # - pyeit  (installed via pip below)
 
   # ── FEM / FEniCS for CUQI8 ───────────────────────────────────
-  - fenics-dolfinx=0.7.2
-  - petsc4py
+  # FEniCS is provided by the dolfinx/dolfinx Docker base image.
+  # Do not add fenics-dolfinx here as it causes strict dependency conflicts 
+  # with PyTorch on standard CI runners.
 
   # ── Configuration ────────────────────────────────────────────
   - pyyaml=6.0.1
