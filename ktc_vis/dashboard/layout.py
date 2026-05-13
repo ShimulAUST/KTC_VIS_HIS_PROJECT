@@ -13,12 +13,12 @@ from ktc_vis.dashboard.modules import (
 )
 
 _TABS = [
-    ("M1 · Explorer",    m1_reconstruction_explorer),
-    ("M2 · Animator",    m2_difficulty_animator),
-    ("M3 · Comparison",  m3_comparison_grid),
-    ("M4 · Radar",       m4_fingerprint_radar),
-    ("M5 · Autopsy",     m5_failure_autopsy),
-    ("M6 · Measurements",m6_measurement_viewer),
+    ("M1 · Explorer", m1_reconstruction_explorer),
+    ("M2 · Animator", m2_difficulty_animator),
+    ("M3 · Comparison", m3_comparison_grid),
+    ("M4 · Radar", m4_fingerprint_radar),
+    ("M5 · Autopsy", m5_failure_autopsy),
+    ("M6 · Measurements", m6_measurement_viewer),
 ]
 
 
