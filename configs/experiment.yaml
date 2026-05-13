@@ -5,8 +5,16 @@
 
 # ── Data paths ─────────────────────────────────────────────────
 data:
-  raw_dir: "data/raw/ktc2023"          # Directory containing KTC2023 .mat files
+  raw_dir: "data/raw/ktc2023"          # Root dir; level dirs inside: level1/, level2/, ...
   cache_path: "data/cache/results.h5"  # HDF5 file for caching benchmark results
+  # File layout inside each levelN/ directory:
+  #   data1.mat  → sample "a"  (keys: Inj, Mpat, Uel)
+  #   data2.mat  → sample "b"
+  #   data3.mat  → sample "c"
+  #   ref.mat    → background reference (keys: Injref, Mpat, Uelref)
+  #   1_true.mat → ground truth for sample "a" (key: truth, shape 256×256 uint8)
+  #   2_true.mat → ground truth for sample "b"
+  #   3_true.mat → ground truth for sample "c"
   weights:
     abc1: "data/raw/weights/abc1"       # ABC1 CNN weights from Zenodo
     pnpe2e: "data/raw/weights/pnpe2e"  # PNPE2E per-level weights
