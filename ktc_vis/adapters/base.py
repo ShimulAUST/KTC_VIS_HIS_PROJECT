@@ -12,7 +12,7 @@ class KTCMeasurement:
 
     current_matrix: np.ndarray    # (n_injections, n_electrodes)
     voltage_matrix: np.ndarray    # (n_injections, n_measurements)
-    resistance_matrix: np.ndarray # (n_injections, n_measurements)  R = V / I
+    resistance_matrix: np.ndarray  # (n_injections, n_measurements)  R = V / I
     ground_truth: np.ndarray      # (256, 256) uint8, values in {0, 1, 2}
     level: int                    # 1–7
     sample: str                   # "a" | "b" | "c"
