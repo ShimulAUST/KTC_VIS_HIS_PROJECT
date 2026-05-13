@@ -20,8 +20,8 @@ LEVEL_SPECS: dict[int, dict[str, int]] = {
     3: {"n_electrodes": 28, "n_measurements": 1404},
     4: {"n_electrodes": 26, "n_measurements": 1200},
     5: {"n_electrodes": 24, "n_measurements": 1012},
-    6: {"n_electrodes": 22, "n_measurements":  630},
-    7: {"n_electrodes": 20, "n_measurements":  513},
+    6: {"n_electrodes": 22, "n_measurements": 630},
+    7: {"n_electrodes": 20, "n_measurements": 513},
 }
 
 
