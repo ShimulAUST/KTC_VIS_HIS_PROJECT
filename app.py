@@ -6,6 +6,3 @@ Run with:
 Then open http://localhost:8050
 """
 # TODO: initialize Dash app, load config, register callbacks
-
-
-#yes i can
