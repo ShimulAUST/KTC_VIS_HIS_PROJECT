@@ -1,0 +1,20 @@
+# Don't copy large/generated files into the Docker build context
+data/
+*.h5
+*.mat
+*.pth
+*.pt
+*.ckpt
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.git/
+.github/
+.venv/
+venv/
+notebooks/
+docs/
+*.log
+logs/
