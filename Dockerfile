@@ -1,38 +1,48 @@
-# ─────────────────────────────────────────────────────────────
-# KTC-Vis Dockerfile
-# Base: dolfinx official image (provides FEniCS/dolfinx for CUQI8)
-# ─────────────────────────────────────────────────────────────
-FROM dolfinx/dolfinx:v0.7.2
+# ─────────────────────────────────────────────────────────────────
+# KTC-Vis Development & Production Image
+#
+# Build:  docker build -t ktc-vis .
+# Run:    docker compose up
+#
+# The algorithm containers (ABC1, CUQI8, PNPE2E) are separate images
+# invoked via the host Docker socket — they do NOT live inside this image.
+# ─────────────────────────────────────────────────────────────────
+
+FROM continuumio/miniconda3:23.10.0-1
 
 LABEL maintainer="KTC-Vis Team"
 LABEL description="KTC-Vis: Interactive EIT Algorithm Benchmarking Dashboard"
 
-# Install Miniconda inside the FEniCS image
-ENV CONDA_DIR=/opt/conda
-RUN apt-get update && apt-get install -y wget curl && \
-    wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -p $CONDA_DIR && \
-    rm /tmp/miniconda.sh && \
-    apt-get clean
+# Install Docker CLI (static binary — works on any Debian version)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.5.1.tgz \
+        | tar xz --strip-components=1 -C /usr/local/bin docker/docker
 
-ENV PATH=$CONDA_DIR/bin:$PATH
-
-# Copy and install Conda environment
 WORKDIR /app
+
+# ── Install Conda environment ─────────────────────────────────────
 COPY environment.yml .
-# Skip fenics-dolfinx in conda (already installed in base image)
-RUN conda env create -f environment.yml --name ktc-vis || true
+RUN conda env create -f environment.yml --name ktc-vis && \
+    conda clean -afy
+
+# Make conda env the default shell for all subsequent RUN/CMD
 SHELL ["conda", "run", "-n", "ktc-vis", "/bin/bash", "-c"]
 
-# Copy project source
-COPY . /app/
+# ── Install project in editable mode ─────────────────────────────
+COPY pyproject.toml ./
+COPY ktc_vis/ ./ktc_vis/
+RUN pip install -e . --no-deps
 
-# Expose Dash default port
+# ── Copy remaining source ─────────────────────────────────────────
+COPY app.py ./
+COPY configs/ ./configs/
+COPY scripts/ ./scripts/
+
+# ── Runtime config ────────────────────────────────────────────────
 EXPOSE 8050
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8050/ || exit 1
 
-# Entry point
 CMD ["conda", "run", "--no-capture-output", "-n", "ktc-vis", "python", "app.py"]
