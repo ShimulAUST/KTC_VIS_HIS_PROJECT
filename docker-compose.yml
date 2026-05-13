@@ -1,0 +1,26 @@
+services:
+  ktc-vis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ktc-vis:latest
+    container_name: ktc-vis-dashboard
+    ports:
+      - "8050:8050"
+
+    volumes:
+      # Data is not committed to git — mount from host so everyone shares the same cache
+      - ./data:/app/data
+
+      # Mount Docker socket so the adapters can call docker run for algorithm containers
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Hot-reload source during development (comment out for production)
+      - ./ktc_vis:/app/ktc_vis
+      - ./app.py:/app/app.py
+      - ./configs:/app/configs
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    restart: unless-stopped
