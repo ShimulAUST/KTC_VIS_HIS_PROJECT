@@ -19,8 +19,8 @@ def build_sidebar() -> html.Div:
             dcc.Dropdown(
                 id="sidebar-algorithm-dropdown",
                 options=[
-                    {"label": "ABC1",   "value": "abc1"},
-                    {"label": "CUQI8",  "value": "cuqi8"},
+                    {"label": "ABC1", "value": "abc1"},
+                    {"label": "CUQI8", "value": "cuqi8"},
                     {"label": "PNPE2E", "value": "pnpe2e"},
                 ],
                 value="abc1",
