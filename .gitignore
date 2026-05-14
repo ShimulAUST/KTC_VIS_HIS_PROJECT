@@ -10,6 +10,12 @@ data/cache/
 *.hdf5
 
 # ─────────────────────────────────────────────
+# External third-party repos (cloned locally, not vendored)
+# Pulled via scripts/setup_third_party.sh
+# ─────────────────────────────────────────────
+ktc_vis/external/
+
+# ─────────────────────────────────────────────
 # Proposal & Project Documents (Local only)
 # ─────────────────────────────────────────────
 *proposal*.txt
