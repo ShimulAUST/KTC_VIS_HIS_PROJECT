@@ -2,8 +2,6 @@
 
 import time
 
-import numpy as np
-
 from ktc_vis.adapters.base import AlgorithmAdapter, KTCMeasurement
 
 
