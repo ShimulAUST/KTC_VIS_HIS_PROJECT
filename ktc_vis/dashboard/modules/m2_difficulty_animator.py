@@ -177,18 +177,23 @@ def _empty_figure(message: str = "") -> go.Figure:
 def _image_layout(title: str) -> dict:
     return {
         "paper_bgcolor": _CARD, "plot_bgcolor": _CARD,
-        "margin": {"l": 4, "r": 4, "t": 28, "b": 4},
-        "title": {"text": title, "font": {"color": _MUTED, "size": 11}, "x": 0.5},
-        "xaxis": {"visible": False}, "yaxis": {"visible": False, "scaleanchor": "x"},
-        "height": 240,
+        "margin": {"l": 0, "r": 0, "t": 24, "b": 0},
+        "title": {"text": title, "font": {"color": _MUTED, "size": 11}, "x": 0.5,
+                  "pad": {"t": 4}},
+        "xaxis": {"visible": False, "scaleanchor": "y"},
+        "yaxis": {"visible": False, "autorange": "reversed"},
+        "height": 260,
     }
 
 
-def _curve_figure(metric: str, algorithm: str, sample: str) -> go.Figure:
+def _curve_figure(metric: str, algorithm: str, sample: str,
+                  current_level: int = 1) -> go.Figure:
     """Try to load metric values from HDF5 cache; show placeholder if unavailable."""
     values = _try_load_from_cache(metric, algorithm, sample)
 
     fig = go.Figure()
+    annotation = []
+
     if values is not None:
         fig.add_trace(go.Scatter(
             x=LEVELS, y=values, mode="lines+markers",
@@ -196,7 +201,11 @@ def _curve_figure(metric: str, algorithm: str, sample: str) -> go.Figure:
             marker={"size": 7, "color": "#7b61ff"},
             name=algorithm.upper(),
         ))
-        annotation = []
+        # Highlight current level with a vertical dashed line
+        fig.add_vline(
+            x=current_level,
+            line={"color": "#ffb300", "width": 1.5, "dash": "dash"},
+        )
     else:
         annotation = [{"text": "Run scripts/run_benchmark.py to populate",
                        "showarrow": False, "font": {"color": _MUTED, "size": 10},
@@ -204,17 +213,20 @@ def _curve_figure(metric: str, algorithm: str, sample: str) -> go.Figure:
 
     fig.update_layout(
         paper_bgcolor=_CARD, plot_bgcolor="#1a1a2e",
-        margin={"l": 36, "r": 8, "t": 8, "b": 28},
+        margin={"l": 36, "r": 8, "t": 8, "b": 36},
         xaxis={
+            "range": [0.5, 7.5],
             "tickvals": LEVELS,
             "ticktext": [str(l) for l in LEVELS],
             "title": {"text": "Level", "font": {"color": _MUTED, "size": 10}},
             "tickfont": {"color": _MUTED, "size": 9},
-            "gridcolor": "#333",
+            "gridcolor": "#2a2a3f",
+            "zeroline": False,
         },
         yaxis={
             "tickfont": {"color": _MUTED, "size": 9},
-            "gridcolor": "#333",
+            "gridcolor": "#2a2a3f",
+            "zeroline": False,
         },
         annotations=annotation,
         showlegend=False,
@@ -299,9 +311,10 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         Output("m2-hausdorff-graph", "figure"),
         Input("sidebar-algorithm-dropdown", "value"),
         Input("sidebar-sample-radio", "value"),
+        Input("m2-level-slider", "value"),
     )
-    def update_curves(algorithm, sample):
-        ssim_fig = _curve_figure("ssim", algorithm, sample)
-        iou_fig = _curve_figure("iou_mean", algorithm, sample)
-        hausdorff_fig = _curve_figure("hausdorff", algorithm, sample)
+    def update_curves(algorithm, sample, level):
+        ssim_fig = _curve_figure("ssim", algorithm, sample, level)
+        iou_fig = _curve_figure("iou_mean", algorithm, sample, level)
+        hausdorff_fig = _curve_figure("hausdorff", algorithm, sample, level)
         return ssim_fig, iou_fig, hausdorff_fig
