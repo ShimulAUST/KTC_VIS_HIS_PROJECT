@@ -235,6 +235,48 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
     return fig
 
 
+def _recon_and_error_figures(
+    level: int, sample: str, algorithm: str
+) -> tuple[go.Figure, go.Figure]:
+    """Return reconstruction and error overlay figures from cache, or placeholders."""
+    try:
+        from ktc_vis.cache.hdf5_store import load_result
+        _, recon = load_result(algorithm, level, sample)
+    except Exception:
+        msg = f"No cache for {algorithm.upper()} L{level}/{sample.upper()} — run benchmark"
+        return _empty_figure(msg), _empty_figure("Requires reconstruction cache")
+
+    unique_vals = np.unique(recon)
+    colorscale = _GT_COLORSCALE_3 if 2 in unique_vals else _GT_COLORSCALE
+    recon_fig = go.Figure(go.Heatmap(
+        z=recon.astype(float), colorscale=colorscale,
+        zmin=0, zmax=2, showscale=False,
+    ))
+    recon_fig.update_layout(**_image_layout(f"{algorithm.upper()} L{level}/{sample.upper()}"))
+
+    # Error overlay: 0=correct(green), 1=false-pos(red), 2=false-neg(blue)
+    idx = SAMPLE_MAP.get(sample, 1)
+    gt_path = RAW_DIR / f"level{level}" / f"{idx}_true.mat"
+    if not gt_path.exists():
+        return recon_fig, _empty_figure("Ground truth not found")
+
+    gt = scipy.io.loadmat(str(gt_path))["truth"].astype(np.uint8)
+    error = np.zeros_like(gt, dtype=np.float32)
+    error[np.logical_and(recon > 0, gt == 0)] = 1.0   # false positive (red)
+    error[np.logical_and(recon == 0, gt > 0)] = 2.0   # false negative (blue)
+
+    error_cs = [
+        [0.00, "#2e7d32"], [0.33, "#2e7d32"],  # correct — green
+        [0.33, "#c62828"], [0.66, "#c62828"],  # false pos — red
+        [0.66, "#1565c0"], [1.00, "#1565c0"],  # false neg — blue
+    ]
+    error_fig = go.Figure(go.Heatmap(
+        z=error, colorscale=error_cs, zmin=0, zmax=2, showscale=False,
+    ))
+    error_fig.update_layout(**_image_layout("Error Overlay"))
+    return recon_fig, error_fig
+
+
 def _try_load_from_cache(metric: str, algorithm: str, sample: str):
     """Return list of metric values for levels 1-7, or None if cache unavailable."""
     try:
@@ -297,11 +339,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     )
     def update_images(level, sample, algorithm):
         gt_fig = _gt_figure(level, sample)
-        recon_fig = _placeholder_figure(
-            f"No cached reconstruction for {algorithm.upper()} L{level}/{sample.upper()}\n"
-            "Run scripts/run_benchmark.py"
-        )
-        error_fig = _placeholder_figure("Requires reconstruction cache")
+        recon_fig, error_fig = _recon_and_error_figures(level, sample, algorithm)
         return gt_fig, recon_fig, error_fig
 
     # ── Update degradation curves ─────────────────────────────────────────────
