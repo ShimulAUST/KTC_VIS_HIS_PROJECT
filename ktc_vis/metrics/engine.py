@@ -7,9 +7,9 @@ import numpy as np
 import scipy.io
 
 from ktc_vis.adapters.base import AlgorithmAdapter, KTCMeasurement
-from ktc_vis.cache.hdf5_store import CacheMiss, is_cached, load_result, save_result
+from ktc_vis.cache.hdf5_store import is_cached, load_result, save_result
 from ktc_vis.metrics.class_metrics import compute_confusion_matrix, compute_mean_iou, compute_per_class_iou
-from ktc_vis.metrics.image_quality import compute_spatial_ssim_map, compute_ssim
+from ktc_vis.metrics.image_quality import compute_ssim
 from ktc_vis.metrics.shape_matching import compute_hausdorff, compute_position_error, compute_resolution
 
 RAW_DIR = Path("data/raw/ktc2023")
@@ -69,7 +69,7 @@ class MetricsEngine:
         # ── Class metrics ─────────────────────────────────────────────────────
         iou = compute_per_class_iou(reconstruction, gt)
         iou_mean = compute_mean_iou(reconstruction, gt)
-        confusion = compute_confusion_matrix(reconstruction, gt)
+        compute_confusion_matrix(reconstruction, gt)
 
         # ── Shape matching ────────────────────────────────────────────────────
         hausdorff = compute_hausdorff(reconstruction, gt)

@@ -15,10 +15,10 @@ SAMPLE_MAP = {"a": 1, "b": 2, "c": 3}
 
 # Segmentation colour scale: 0=water(blue), 1=resistive(red), 2=conductive(green)
 _GT_COLORSCALE = [
-    [0.0,  "#1565c0"],
-    [0.5,  "#1565c0"],
-    [0.5,  "#c62828"],
-    [1.0,  "#c62828"],
+    [0.0, "#1565c0"],
+    [0.5, "#1565c0"],
+    [0.5, "#c62828"],
+    [1.0, "#c62828"],
 ]
 _GT_COLORSCALE_3 = [
     [0.00, "#1565c0"],
@@ -217,7 +217,7 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
         xaxis={
             "range": [0.5, 7.5],
             "tickvals": LEVELS,
-            "ticktext": [str(l) for l in LEVELS],
+            "ticktext": [str(lv) for lv in LEVELS],
             "title": {"text": "Level", "font": {"color": _MUTED, "size": 10}},
             "tickfont": {"color": _MUTED, "size": 9},
             "gridcolor": "#2a2a3f",
