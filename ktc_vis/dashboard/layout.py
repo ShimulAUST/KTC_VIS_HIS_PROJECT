@@ -11,6 +11,7 @@ from ktc_vis.dashboard.modules import (
     m5_failure_autopsy,
     m6_measurement_viewer,
 )
+from ktc_vis.dashboard.theme import ACCENT, BG, BORDER, MUTED, SURFACE, TEXT
 
 _TABS = [
     ("M1 · Explorer", m1_reconstruction_explorer),
@@ -24,6 +25,25 @@ _TABS = [
 
 def create_layout() -> html.Div:
     """Return the full app layout: sidebar + tabbed module area."""
+    tab_style = {
+        "backgroundColor": SURFACE,
+        "color": MUTED,
+        "padding": "10px 16px",
+        "border": "none",
+        "borderRight": f"1px solid {BORDER}",
+        "fontSize": "12.5px",
+        "fontWeight": 500,
+    }
+    tab_selected_style = {
+        "backgroundColor": BG,
+        "color": TEXT,
+        "padding": "10px 16px",
+        "borderTop": f"2px solid {ACCENT}",
+        "borderRight": f"1px solid {BORDER}",
+        "fontSize": "12.5px",
+        "fontWeight": 600,
+    }
+
     tabs = dcc.Tabs(
         id="main-tabs",
         value="tab-0",
@@ -32,20 +52,33 @@ def create_layout() -> html.Div:
                 label=label,
                 value=f"tab-{i}",
                 children=module.layout(),
-                style={"backgroundColor": "#1a1a2e", "color": "#aaa", "padding": "6px 12px"},
-                selected_style={"backgroundColor": "#2a2a3f", "color": "#fff",
-                                "borderTop": "2px solid #7b61ff", "padding": "6px 12px"},
+                style=tab_style,
+                selected_style=tab_selected_style,
             )
             for i, (label, module) in enumerate(_TABS)
         ],
         style={"flex": "1"},
-        colors={"border": "#333", "primary": "#7b61ff", "background": "#1a1a2e"},
+        colors={"border": BORDER, "primary": ACCENT, "background": SURFACE},
     )
 
     return html.Div(
-        [build_sidebar(), html.Div(tabs, style={"flex": "1", "overflow": "auto"})],
-        style={"display": "flex", "height": "100vh",
-               "backgroundColor": "#12121e", "fontFamily": "Inter, sans-serif"},
+        [
+            build_sidebar(),
+            html.Div(
+                tabs,
+                style={
+                    "flex": "1",
+                    "overflow": "auto",
+                    "backgroundColor": BG,
+                },
+            ),
+        ],
+        style={
+            "display": "flex",
+            "height": "100vh",
+            "backgroundColor": BG,
+            "fontFamily": "Inter, -apple-system, Segoe UI, Roboto, sans-serif",
+        },
     )
 
 
