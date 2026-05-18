@@ -1,193 +1,358 @@
-"""Module 2: Difficulty Animator.
+"""Module 2: Difficulty Animator. Owner: Asmita Bhuva."""
 
-Shows how the input measurement and the reconstruction quality degrade as
-the difficulty level rises from 1 → 7.
-
-Until the HDF5 metric cache is populated by ``scripts/run_benchmark.py``,
-SSIM/IoU/Hausdorff curves are computed on-the-fly from the precomputed
-reference reconstructions (Level 1) and the subsampled measurements.
-"""
-
-from __future__ import annotations
-
-import logging
-from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
-from dash import Input, Output, dcc, html
+import scipy.io
+from dash import Input, Output, State, dcc, html
+from dash.exceptions import PreventUpdate
 
-from ktc_vis.adapters import ReferenceOutputAdapter
-from ktc_vis.data.loader import KTCDataLoader
-from ktc_vis.data.subsampler import LEVEL_SPECS
+# ── Constants ─────────────────────────────────────────────────────────────────
+RAW_DIR = Path("data/raw/ktc2023")
+LEVELS = list(range(1, 8))
+SAMPLE_MAP = {"a": 1, "b": 2, "c": 3}
 
-logger = logging.getLogger(__name__)
+# Segmentation colour scale: 0=water(blue), 1=resistive(red), 2=conductive(green)
+_GT_COLORSCALE = [
+    [0.0, "#1565c0"],
+    [0.5, "#1565c0"],
+    [0.5, "#c62828"],
+    [1.0, "#c62828"],
+]
+_GT_COLORSCALE_3 = [
+    [0.00, "#1565c0"],
+    [0.33, "#1565c0"],
+    [0.33, "#c62828"],
+    [0.66, "#c62828"],
+    [0.66, "#2e7d32"],
+    [1.00, "#2e7d32"],
+]
 
-_LOADER = KTCDataLoader()
+_DARK = "#12121e"
+_PANEL = "#1e1e2f"
+_CARD = "#2a2a3f"
+_TEXT = "#eeeeee"
+_MUTED = "#888888"
 
-_CURVE_ID = "m2-degradation-curve"
-_MEAS_ID = "m2-measurement-curve"
-_RECON_ID = "m2-recon-preview"
-_STATUS_ID = "m2-status"
 
-_PAPER_BG = "#2a2a3f"
-_PLOT_BG = "#1a1a2e"
-
+# ── Layout ────────────────────────────────────────────────────────────────────
 
 def layout() -> html.Div:
-    return html.Div(
-        [
-            html.H3("Difficulty Animator", style={"color": "#eee"}),
-            html.P(
-                "Reconstruction quality and input measurement size across "
-                "difficulty levels 1–7. Curves update with the selected "
-                "algorithm and sample.",
-                style={"color": "#aaa"},
-            ),
-            html.Div(id=_STATUS_ID, style={"color": "#888", "fontSize": "12px",
-                                           "marginBottom": "8px"}),
-            html.Div(
-                [
-                    html.Div(
-                        dcc.Graph(id=_CURVE_ID, config={"displayModeBar": False}),
-                        style={"flex": "1", "minWidth": "320px",
-                               "backgroundColor": _PAPER_BG,
-                               "borderRadius": "8px", "padding": "4px"},
-                    ),
-                    html.Div(
-                        dcc.Graph(id=_MEAS_ID, config={"displayModeBar": False}),
-                        style={"flex": "1", "minWidth": "320px",
-                               "backgroundColor": _PAPER_BG,
-                               "borderRadius": "8px", "padding": "4px"},
-                    ),
-                ],
-                style={"display": "flex", "gap": "12px", "flexWrap": "wrap",
-                       "marginBottom": "12px"},
-            ),
-        ],
-        style={"padding": "20px"},
-    )
+    """Level animator: ground truth images + degradation curves across levels 1–7."""
+    return html.Div([
+        # ── Title ────────────────────────────────────────────────────────────
+        html.H3("Difficulty Animator", style={"color": _TEXT, "marginBottom": "4px"}),
+        html.P(
+            "Animate how phantom complexity changes across difficulty levels 1–7. "
+            "Reconstructions and metric curves appear once the benchmark cache is populated.",
+            style={"color": _MUTED, "marginBottom": "20px", "fontSize": "13px"},
+        ),
+
+        # ── Controls ─────────────────────────────────────────────────────────
+        html.Div([
+            html.Div([
+                html.Label("Level", style={"color": "#ccc", "fontSize": "12px",
+                                           "marginBottom": "4px", "display": "block"}),
+                dcc.Slider(
+                    id="m2-level-slider",
+                    min=1, max=7, step=1, value=1,
+                    marks={i: {"label": str(i), "style": {"color": "#ccc"}}
+                           for i in LEVELS},
+                    tooltip={"placement": "top"},
+                ),
+            ], style={"flex": "1", "marginRight": "20px"}),
+
+            html.Div([
+                html.Button(
+                    "▶  Play",
+                    id="m2-play-btn",
+                    n_clicks=0,
+                    style=_btn_style("#7b61ff"),
+                ),
+            ], style={"paddingTop": "22px"}),
+        ], style={"display": "flex", "alignItems": "flex-start",
+                  "marginBottom": "20px", "backgroundColor": _PANEL,
+                  "padding": "16px", "borderRadius": "8px"}),
+
+        # ── Animation interval (disabled by default) ──────────────────────────
+        dcc.Interval(id="m2-interval", interval=1200, n_intervals=0, disabled=True),
+
+        # ── Play state store ─────────────────────────────────────────────────
+        dcc.Store(id="m2-playing", data=False),
+
+        # ── Image panels ─────────────────────────────────────────────────────
+        html.Div([
+            _image_card("Ground Truth", "m2-gt-graph",
+                        "Loaded from KTC2023 dataset"),
+            _image_card("Reconstruction", "m2-recon-graph",
+                        "Requires benchmark cache — run scripts/run_benchmark.py"),
+            _image_card("Error Overlay", "m2-error-graph",
+                        "Green=correct · Red=false positive · Blue=false negative"),
+        ], style={"display": "flex", "gap": "12px", "marginBottom": "20px"}),
+
+        # ── Degradation curves ────────────────────────────────────────────────
+        html.Div([
+            _curve_card("SSIM", "m2-ssim-graph"),
+            _curve_card("Mean IoU", "m2-iou-graph"),
+            _curve_card("Hausdorff Distance", "m2-hausdorff-graph"),
+        ], style={"display": "flex", "gap": "12px"}),
+
+    ], style={"padding": "20px", "backgroundColor": _DARK, "minHeight": "100vh"})
 
 
-@lru_cache(maxsize=16)
-def _recon_for(algorithm: str, sample: str) -> np.ndarray:
-    """Cached level-1 reference reconstruction for (algorithm, sample)."""
-    adapter = ReferenceOutputAdapter(algorithm)
-    meas = _LOADER.load(level=1, sample=sample)
-    return adapter.reconstruct(meas).astype(np.uint8)
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _btn_style(color: str) -> dict:
+    return {
+        "backgroundColor": color, "color": "#fff", "border": "none",
+        "padding": "8px 20px", "borderRadius": "6px", "cursor": "pointer",
+        "fontSize": "14px", "fontWeight": "bold", "minWidth": "100px",
+    }
 
 
-def _pixel_agreement(pred: np.ndarray, gt: np.ndarray) -> float:
-    return float((pred == gt).mean())
+def _image_card(title: str, graph_id: str, subtitle: str) -> html.Div:
+    return html.Div([
+        html.Div(title, style={"color": _TEXT, "fontWeight": "bold",
+                               "fontSize": "13px", "marginBottom": "2px"}),
+        html.Div(subtitle, style={"color": _MUTED, "fontSize": "10px",
+                                  "marginBottom": "6px"}),
+        dcc.Graph(id=graph_id, config={"displayModeBar": False},
+                  style={"height": "260px"}),
+    ], style={"flex": "1", "backgroundColor": _CARD, "borderRadius": "8px",
+              "padding": "12px"})
 
 
-def _per_class_iou(pred: np.ndarray, gt: np.ndarray) -> dict[int, float]:
-    out = {}
-    for cls in (0, 1, 2):
-        p, g = pred == cls, gt == cls
-        union = np.logical_or(p, g).sum()
-        out[cls] = float(np.logical_and(p, g).sum() / union) if union else 1.0
-    return out
+def _curve_card(title: str, graph_id: str) -> html.Div:
+    return html.Div([
+        html.Div(title, style={"color": _TEXT, "fontWeight": "bold",
+                               "fontSize": "13px", "marginBottom": "6px"}),
+        dcc.Graph(id=graph_id, config={"displayModeBar": False},
+                  style={"height": "180px"}),
+    ], style={"flex": "1", "backgroundColor": _CARD, "borderRadius": "8px",
+              "padding": "12px"})
 
 
-def register_callbacks(app) -> None:  # noqa: ANN001
+# ── Figure builders ───────────────────────────────────────────────────────────
 
-    @app.callback(
-        Output(_CURVE_ID, "figure"),
-        Output(_MEAS_ID, "figure"),
-        Output(_STATUS_ID, "children"),
-        Input("sidebar-algorithm-dropdown", "value"),
-        Input("sidebar-sample-radio", "value"),
-    )
-    def _update_curves(algorithm: str, sample: str):
-        try:
-            gt = _LOADER.load(level=1, sample=sample).ground_truth.astype(np.uint8)
-            recon = _recon_for(algorithm, sample)
-        except Exception as exc:
-            logger.exception("M2 update failed")
-            msg = f"Error: {exc}"
-            return _empty(msg), _empty(msg), msg
+def _gt_figure(level: int, sample: str) -> go.Figure:
+    """Load ground truth .mat and return a Plotly heatmap figure."""
+    idx = SAMPLE_MAP.get(sample, 1)
+    mat_path = RAW_DIR / f"level{level}" / f"{idx}_true.mat"
 
-        # Quality curve — recon is fixed at level 1 (precomputed); the curve
-        # is therefore a flat reference. Once the HDF5 cache is populated this
-        # will show real per-level degradation.
-        levels = list(range(1, 8))
-        agreement = [_pixel_agreement(recon, gt) for _ in levels]
-        iou_inc = []
-        for _ in levels:
-            iou = _per_class_iou(recon, gt)
-            iou_inc.append((iou[1] + iou[2]) / 2)
+    if not mat_path.exists():
+        return _empty_figure("Data not found")
 
-        fig_q = go.Figure()
-        fig_q.add_trace(go.Scatter(
-            x=levels, y=agreement, mode="lines+markers",
-            name="Pixel agreement", line=dict(color="#5b8def", width=2),
-        ))
-        fig_q.add_trace(go.Scatter(
-            x=levels, y=iou_inc, mode="lines+markers",
-            name="IoU (inclusions)", line=dict(color="#e85d75", width=2),
-        ))
-        fig_q.update_layout(
-            title=dict(text=f"Quality vs Difficulty · {algorithm}/{sample}",
-                       font=dict(color="#ddd", size=13), x=0.5),
-            paper_bgcolor=_PAPER_BG, plot_bgcolor=_PLOT_BG,
-            xaxis=dict(title="Difficulty Level", color="#aaa",
-                       tickmode="linear", dtick=1, gridcolor="#333"),
-            yaxis=dict(title="Score (0–1)", color="#aaa",
-                       range=[0, 1.05], gridcolor="#333"),
-            legend=dict(font=dict(color="#ccc"), bgcolor="rgba(0,0,0,0)"),
-            height=320, margin=dict(l=50, r=20, t=40, b=40),
-        )
+    truth = scipy.io.loadmat(str(mat_path))["truth"].astype(float)
+    unique_vals = np.unique(truth)
+    colorscale = _GT_COLORSCALE_3 if 2 in unique_vals else _GT_COLORSCALE
 
-        # Measurement size curve — actually changes per level
-        n_meas = []
-        n_inj = []
-        for lvl in levels:
-            m = _LOADER.load(level=lvl, sample=sample)
-            n_meas.append(m.voltage_matrix.size)
-            n_inj.append(m.current_matrix.shape[0])
-
-        expected = [LEVEL_SPECS[l]["n_measurements"] for l in levels]
-
-        fig_m = go.Figure()
-        fig_m.add_trace(go.Scatter(
-            x=levels, y=n_meas, mode="lines+markers",
-            name="Subsampled (this loader)",
-            line=dict(color="#7b61ff", width=2),
-        ))
-        fig_m.add_trace(go.Scatter(
-            x=levels, y=expected, mode="lines+markers",
-            name="KTC2023 Table 1",
-            line=dict(color="#aaa", width=2, dash="dot"),
-        ))
-        fig_m.update_layout(
-            title=dict(text="Input Measurements per Level",
-                       font=dict(color="#ddd", size=13), x=0.5),
-            paper_bgcolor=_PAPER_BG, plot_bgcolor=_PLOT_BG,
-            xaxis=dict(title="Difficulty Level", color="#aaa",
-                       tickmode="linear", dtick=1, gridcolor="#333"),
-            yaxis=dict(title="# voltage measurements", color="#aaa",
-                       gridcolor="#333"),
-            legend=dict(font=dict(color="#ccc"), bgcolor="rgba(0,0,0,0)"),
-            height=320, margin=dict(l=60, r=20, t=40, b=40),
-        )
-
-        status = (
-            f"algorithm={algorithm}  sample={sample}  •  "
-            "Quality curve is flat until Docker adapters provide live "
-            "reconstructions for levels 2–7."
-        )
-        return fig_q, fig_m, status
+    fig = go.Figure(go.Heatmap(
+        z=truth,
+        colorscale=colorscale,
+        zmin=0, zmax=2,
+        showscale=False,
+    ))
+    fig.update_layout(**_image_layout(f"Level {level} · Sample {sample.upper()}"))
+    return fig
 
 
-def _empty(msg: str) -> go.Figure:
+def _placeholder_figure(message: str) -> go.Figure:
+    return _empty_figure(message)
+
+
+def _empty_figure(message: str = "") -> go.Figure:
     fig = go.Figure()
     fig.update_layout(
-        paper_bgcolor=_PAPER_BG, plot_bgcolor=_PLOT_BG,
-        height=320, margin=dict(l=10, r=10, t=10, b=10),
-        annotations=[dict(text=msg, showarrow=False,
-                          font=dict(color="#888"), xref="paper", yref="paper",
-                          x=0.5, y=0.5)],
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
+        paper_bgcolor=_CARD, plot_bgcolor=_CARD,
+        xaxis={"visible": False}, yaxis={"visible": False},
+        margin={"l": 0, "r": 0, "t": 0, "b": 0},
+        annotations=[{"text": message, "showarrow": False,
+                      "font": {"color": _MUTED, "size": 12},
+                      "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5}],
     )
     return fig
+
+
+def _image_layout(title: str) -> dict:
+    return {
+        "paper_bgcolor": _CARD, "plot_bgcolor": _CARD,
+        "margin": {"l": 0, "r": 0, "t": 24, "b": 0},
+        "title": {"text": title, "font": {"color": _MUTED, "size": 11}, "x": 0.5,
+                  "pad": {"t": 4}},
+        "xaxis": {"visible": False, "scaleanchor": "y"},
+        "yaxis": {"visible": False, "autorange": "reversed"},
+        "height": 260,
+    }
+
+
+def _curve_figure(metric: str, algorithm: str, sample: str,
+                  current_level: int = 1) -> go.Figure:
+    """Try to load metric values from HDF5 cache; show placeholder if unavailable."""
+    values = _try_load_from_cache(metric, algorithm, sample)
+
+    fig = go.Figure()
+    annotation = []
+
+    if values is not None:
+        fig.add_trace(go.Scatter(
+            x=LEVELS, y=values, mode="lines+markers",
+            line={"color": "#7b61ff", "width": 2},
+            marker={"size": 7, "color": "#7b61ff"},
+            name=algorithm.upper(),
+        ))
+        # Highlight current level with a vertical dashed line
+        fig.add_vline(
+            x=current_level,
+            line={"color": "#ffb300", "width": 1.5, "dash": "dash"},
+        )
+    else:
+        annotation = [{"text": "Run scripts/run_benchmark.py to populate",
+                       "showarrow": False, "font": {"color": _MUTED, "size": 10},
+                       "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5}]
+
+    fig.update_layout(
+        paper_bgcolor=_CARD, plot_bgcolor="#1a1a2e",
+        margin={"l": 36, "r": 8, "t": 8, "b": 36},
+        xaxis={
+            "range": [0.5, 7.5],
+            "tickvals": LEVELS,
+            "ticktext": [str(lv) for lv in LEVELS],
+            "title": {"text": "Level", "font": {"color": _MUTED, "size": 10}},
+            "tickfont": {"color": _MUTED, "size": 9},
+            "gridcolor": "#2a2a3f",
+            "zeroline": False,
+        },
+        yaxis={
+            "tickfont": {"color": _MUTED, "size": 9},
+            "gridcolor": "#2a2a3f",
+            "zeroline": False,
+        },
+        annotations=annotation,
+        showlegend=False,
+        height=160,
+    )
+    return fig
+
+
+def _recon_and_error_figures(
+    level: int, sample: str, algorithm: str
+) -> tuple[go.Figure, go.Figure]:
+    """Return reconstruction and error overlay figures from cache, or placeholders."""
+    try:
+        from ktc_vis.cache.hdf5_store import load_result
+        _, recon = load_result(algorithm, level, sample)
+    except Exception:
+        msg = f"No cache for {algorithm.upper()} L{level}/{sample.upper()} — run benchmark"
+        return _empty_figure(msg), _empty_figure("Requires reconstruction cache")
+
+    unique_vals = np.unique(recon)
+    colorscale = _GT_COLORSCALE_3 if 2 in unique_vals else _GT_COLORSCALE
+    recon_fig = go.Figure(go.Heatmap(
+        z=recon.astype(float), colorscale=colorscale,
+        zmin=0, zmax=2, showscale=False,
+    ))
+    recon_fig.update_layout(**_image_layout(f"{algorithm.upper()} L{level}/{sample.upper()}"))
+
+    # Error overlay: 0=correct(green), 1=false-pos(red), 2=false-neg(blue)
+    idx = SAMPLE_MAP.get(sample, 1)
+    gt_path = RAW_DIR / f"level{level}" / f"{idx}_true.mat"
+    if not gt_path.exists():
+        return recon_fig, _empty_figure("Ground truth not found")
+
+    gt = scipy.io.loadmat(str(gt_path))["truth"].astype(np.uint8)
+    error = np.zeros_like(gt, dtype=np.float32)
+    error[np.logical_and(recon > 0, gt == 0)] = 1.0   # false positive (red)
+    error[np.logical_and(recon == 0, gt > 0)] = 2.0   # false negative (blue)
+
+    error_cs = [
+        [0.00, "#2e7d32"], [0.33, "#2e7d32"],  # correct — green
+        [0.33, "#c62828"], [0.66, "#c62828"],  # false pos — red
+        [0.66, "#1565c0"], [1.00, "#1565c0"],  # false neg — blue
+    ]
+    error_fig = go.Figure(go.Heatmap(
+        z=error, colorscale=error_cs, zmin=0, zmax=2, showscale=False,
+    ))
+    error_fig.update_layout(**_image_layout("Error Overlay"))
+    return recon_fig, error_fig
+
+
+def _try_load_from_cache(metric: str, algorithm: str, sample: str):
+    """Return list of metric values for levels 1-7, or None if cache unavailable."""
+    try:
+        import h5py
+        cache_path = Path("data/cache/results.h5")
+        if not cache_path.exists():
+            return None
+        values = []
+        with h5py.File(str(cache_path), "r") as f:
+            for level in LEVELS:
+                key = f"results/{algorithm}/{level}/{sample}/{metric}"
+                if key not in f:
+                    return None
+                values.append(float(f[key][()]))
+        return values
+    except Exception:
+        return None
+
+
+# ── Callbacks ─────────────────────────────────────────────────────────────────
+
+def register_callbacks(app) -> None:  # noqa: ANN001
+    """Register all M2 callbacks."""
+
+    # ── Play / Pause toggle ───────────────────────────────────────────────────
+    @app.callback(
+        Output("m2-interval", "disabled"),
+        Output("m2-playing", "data"),
+        Output("m2-play-btn", "children"),
+        Input("m2-play-btn", "n_clicks"),
+        State("m2-playing", "data"),
+        prevent_initial_call=True,
+    )
+    def toggle_play(n_clicks, is_playing):
+        playing = not is_playing
+        label = "⏸  Pause" if playing else "▶  Play"
+        return not playing, playing, label
+
+    # ── Advance level on each tick ────────────────────────────────────────────
+    @app.callback(
+        Output("m2-level-slider", "value"),
+        Input("m2-interval", "n_intervals"),
+        State("m2-level-slider", "value"),
+        State("m2-playing", "data"),
+        prevent_initial_call=True,
+    )
+    def advance_level(n_intervals, current_level, is_playing):
+        if not is_playing:
+            raise PreventUpdate
+        return (current_level % 7) + 1  # cycle 1→2→…→7→1
+
+    # ── Update images on level / sample change ────────────────────────────────
+    @app.callback(
+        Output("m2-gt-graph", "figure"),
+        Output("m2-recon-graph", "figure"),
+        Output("m2-error-graph", "figure"),
+        Input("m2-level-slider", "value"),
+        Input("sidebar-sample-radio", "value"),
+        Input("sidebar-algorithm-dropdown", "value"),
+    )
+    def update_images(level, sample, algorithm):
+        gt_fig = _gt_figure(level, sample)
+        recon_fig, error_fig = _recon_and_error_figures(level, sample, algorithm)
+        return gt_fig, recon_fig, error_fig
+
+    # ── Update degradation curves ─────────────────────────────────────────────
+    @app.callback(
+        Output("m2-ssim-graph", "figure"),
+        Output("m2-iou-graph", "figure"),
+        Output("m2-hausdorff-graph", "figure"),
+        Input("sidebar-algorithm-dropdown", "value"),
+        Input("sidebar-sample-radio", "value"),
+        Input("m2-level-slider", "value"),
+    )
+    def update_curves(algorithm, sample, level):
+        ssim_fig = _curve_figure("ssim", algorithm, sample, level)
+        iou_fig = _curve_figure("iou_mean", algorithm, sample, level)
+        hausdorff_fig = _curve_figure("hausdorff", algorithm, sample, level)
+        return ssim_fig, iou_fig, hausdorff_fig
