@@ -27,18 +27,26 @@ _PAPER_BG = "#2a2a3f"
 _PLOT_BG = "#1a1a2e"
 
 
-def _base_layout(title: str, height: int = 320) -> dict:
-    """Default dark-mode layout shared by all image figures."""
-    return dict(
+def _base_layout(title: str, height: int | None = None) -> dict:
+    """Default dark-mode layout shared by all image figures.
+
+    height is intentionally None by default so that responsive=True on the
+    dcc.Graph container drives the size — no conflict between figure height
+    and CSS container height on first render.
+    """
+    layout = dict(
         title=dict(text=title, x=0.5, font=dict(color="#ddd", size=13)),
         paper_bgcolor=_PAPER_BG,
         plot_bgcolor=_PLOT_BG,
         margin=dict(l=10, r=10, t=36, b=10),
-        height=height,
+        autosize=True,
         xaxis=dict(visible=False, scaleanchor="y", scaleratio=1),
         yaxis=dict(visible=False, autorange="reversed"),
-        uirevision="constant",  # preserve zoom across updates
+        uirevision="constant",
     )
+    if height is not None:
+        layout["height"] = height
+    return layout
 
 
 def segmentation_figure(seg: np.ndarray, title: str = "Segmentation") -> go.Figure:
