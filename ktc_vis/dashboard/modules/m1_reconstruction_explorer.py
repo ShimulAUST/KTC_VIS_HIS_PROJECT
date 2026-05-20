@@ -21,7 +21,6 @@ from ktc_vis.data.loader import KTCDataLoader
 from ktc_vis.dashboard.theme import (
     ACCENT,
     BORDER,
-    CARD,
     CARD_STYLE,
     DANGER,
     MUTED,
@@ -362,8 +361,8 @@ def _legend_row() -> html.Div:
 
 def _banner(message: str, kind: str = "info") -> html.Div:
     palette = {
-        "info":  ("#1f3a5f", "#5b8def", "#cfe0ff"),
-        "warn":  ("#3a2a1a", WARN, "#f4c870"),
+        "info": ("#1f3a5f", "#5b8def", "#cfe0ff"),
+        "warn": ("#3a2a1a", WARN, "#f4c870"),
         "error": ("#3a1f25", DANGER, "#ffd1d8"),
     }
     bg, border, fg = palette.get(kind, palette["info"])
