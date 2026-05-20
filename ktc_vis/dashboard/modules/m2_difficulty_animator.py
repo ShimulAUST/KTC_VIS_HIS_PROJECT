@@ -820,7 +820,6 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     def update_level_context(level):
         meta = _LEVEL_META[level]
         l1 = _LEVEL_META[1]
-        elec_pct = meta["electrodes"] / l1["electrodes"] * 100
         meas_pct = meta["measurements"] / l1["measurements"] * 100
         elec_lost = l1["electrodes"] - meta["electrodes"]
         meas_lost = l1["measurements"] - meta["measurements"]
@@ -862,5 +861,5 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                                          "fontStyle": "italic"}),
         ], style={
             "backgroundColor": _PANEL, "borderRadius": "8px",
-            "padding": "10px 14px", "border": f"1px solid #2e2e44",
+            "padding": "10px 14px", "border": "1px solid #2e2e44",
         })
