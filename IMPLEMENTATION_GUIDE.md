@@ -74,8 +74,9 @@ ktc-vis/
 │       ├── __init__.py
 │       └── figures.py            # Shared Plotly figure helpers
 ├── scripts/
-│   ├── run_benchmark.py          # CLI: run full benchmark and populate HDF5 cache
-│   └── validate_data.py          # CLI: verify .mat files are correctly downloaded
+│   ├── run_benchmark.py                   # CLI: run full benchmark and populate HDF5 cache
+│   ├── populate_cache_from_reference.py   # CLI: fast cache population using pre-computed .mat outputs
+│   └── validate_data.py                   # CLI: verify .mat files are correctly downloaded
 ├── tests/
 │   ├── conftest.py               # Shared pytest fixtures (loaded data, mock cache)
 │   ├── test_loader.py
@@ -114,7 +115,7 @@ ktc-vis/
   - `resistance_matrix`: ndarray derived as R = V / I
   - `ground_truth`: ndarray (256 × 256) with values {0=water, 1=resistive, 2=conductive}
   - `level`: int 1–7
-  - `sample`: str "a" | "b" | "c"
+  - `sample`: str "a" | "b" | "c" | "d"
 - Validates electrode subsampling matches the official KTC dataset exactly:
   - Level 1: 32 electrodes, 2356 measurements
   - Level 2: 30 electrodes, 1624 measurements
@@ -195,7 +196,7 @@ ktc-vis/
 - Test that cache saves and loads correctly.
 
 #### `scripts/run_benchmark.py`
-- CLI tool: iterates all 3 algorithms × 7 levels × 3 samples; calls MetricsEngine; populates HDF5.
+- CLI tool: iterates all 3 algorithms × 7 levels × 4 samples; calls MetricsEngine; populates HDF5.
 - Progress bar; skip if already cached.
 
 ---
@@ -318,7 +319,7 @@ ktc-vis/
 ## 5. Acceptance Criteria (Definition of Done)
 
 ### Data Layer
-- [ ] `KTCDataLoader.load(level, sample)` returns correct matrix shapes for all 7 levels and 3 samples.
+- [ ] `KTCDataLoader.load(level, sample)` returns correct matrix shapes for all 7 levels and 4 samples.
 - [ ] Electrode subsampling matches KTC2023 paper Table 1 exactly.
 
 ### Adapters
@@ -328,7 +329,7 @@ ktc-vis/
 
 ### Metrics Engine
 - [ ] SSIM implementation matches published values from KTC2023 organiser scores.
-- [ ] All 14 metrics computed and cached correctly for all 3 × 7 × 3 = 63 combinations.
+- [ ] All 14 metrics computed and cached correctly for all 3 × 7 × 4 = 84 combinations.
 - [ ] Second call to `MetricsEngine.compute_all()` reads from cache (no recomputation).
 
 ### Dashboard Modules
@@ -341,7 +342,7 @@ ktc-vis/
 - [ ] `docker build` completes without errors.
 - [ ] `docker run -p 8050:8050 ktc-vis` launches dashboard accessible in browser.
 - [ ] GitHub Actions CI runs `pytest` and reports pass/fail on every PR.
-- [ ] Full benchmark (all 63 combinations) runs end-to-end and populates HDF5 cache.
+- [ ] Full benchmark (all 84 combinations) runs end-to-end and populates HDF5 cache.
 
 ---
 
