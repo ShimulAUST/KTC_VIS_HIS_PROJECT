@@ -27,7 +27,7 @@ def save_result(
     Args:
         algorithm: Algorithm name, e.g. "abc1".
         level: Difficulty level 1–7.
-        sample: Sample identifier "a", "b", or "c".
+        sample: Sample identifier — one of "a", "b", "c", "d".
         metrics: Dict of metric name → scalar float value.
         reconstruction: 256×256 uint8 segmentation array.
         cache_path: Path to the HDF5 file.
@@ -55,7 +55,7 @@ def load_result(
     Args:
         algorithm: Algorithm name.
         level: Difficulty level 1–7.
-        sample: Sample identifier.
+        sample: Sample identifier — one of "a", "b", "c", "d".
         cache_path: Path to the HDF5 file.
 
     Returns:
