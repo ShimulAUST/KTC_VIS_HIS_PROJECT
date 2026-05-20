@@ -222,9 +222,9 @@ def _analysis_row() -> html.Div:
     return html.Div(
         [
             _panel("Segmentation", "Algorithm output (3-class)", _SEG_ID,
-                   badge="Seg", badge_color="#a07bff", height=320),
+                   badge="Seg", badge_color="#a07bff", height=440),
             _panel("Error Overlay", "Per-pixel agreement vs. GT", _ERR_ID,
-                   badge="Δ", badge_color=DANGER, height=320),
+                   badge="Δ", badge_color=DANGER, height=440),
         ],
         style={
             "display": "grid",
@@ -243,6 +243,8 @@ def _panel(
     badge_color: str = ACCENT,
     height: int = 340,
 ) -> html.Div:
+    # 44px header + 16px inner padding + 2px border = 62px overhead
+    card_height = height + 62
     return html.Div(
         [
             html.Div(
@@ -282,12 +284,23 @@ def _panel(
                     id=graph_id,
                     figure=empty_figure("Loading…"),
                     config={"displayModeBar": False, "responsive": True},
-                    style={"height": f"{height}px"},
+                    style={"height": f"{height}px", "width": "100%"},
                 ),
-                style={"padding": "6px 6px 10px"},
+                style={
+                    "padding": "6px 6px 10px",
+                    "flex": "1",
+                    "minHeight": "0",
+                    "overflow": "hidden",
+                },
             ),
         ],
-        style=CARD_STYLE,
+        style={
+            **CARD_STYLE,
+            "height": f"{card_height}px",
+            "display": "flex",
+            "flexDirection": "column",
+            "overflow": "hidden",
+        },
     )
 
 

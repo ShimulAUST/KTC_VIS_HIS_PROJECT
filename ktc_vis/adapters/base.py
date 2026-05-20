@@ -15,7 +15,7 @@ class KTCMeasurement:
     resistance_matrix: np.ndarray  # (n_injections, n_measurements)  R = V / I
     ground_truth: np.ndarray      # (256, 256) uint8, values in {0, 1, 2}
     level: int                    # 1–7
-    sample: str                   # "a" | "b" | "c"
+    sample: str                   # "a" | "b" | "c" | "d"
 
 
 class AlgorithmAdapter(ABC):
@@ -27,9 +27,18 @@ class AlgorithmAdapter(ABC):
       2. Invoking `docker run` with the correct volume mounts and command.
       3. Reading the output reconstruction back from the host directory.
       4. Returning a 256×256 uint8 array with values in {0, 1, 2}.
+
+    Args:
+        timeout: Seconds before docker run is killed (default 600).
+        stream:  If True, stream docker stdout/stderr to the terminal.
     """
 
     name: str  # Short identifier used in HDF5 cache keys and UI labels
+    supports_level_batching: bool = False  # Override in adapters that can process a whole level at once
+
+    def __init__(self, timeout: int = 600, stream: bool = False) -> None:
+        self.timeout = timeout
+        self.stream = stream
 
     @abstractmethod
     def reconstruct(self, measurement: KTCMeasurement) -> np.ndarray:
@@ -42,3 +51,16 @@ class AlgorithmAdapter(ABC):
             256×256 uint8 ndarray with pixel values in {0=water, 1=resistive,
             2=conductive}.
         """
+
+    def reconstruct_level(
+        self, level: int, samples: list[str]
+    ) -> dict[str, np.ndarray]:
+        """Run reconstruction for all samples at a given level in one docker call.
+
+        Default implementation calls reconstruct() per sample (no batching).
+        Override in adapters where the container already processes all samples.
+
+        Returns:
+            Dict mapping sample identifier → 256×256 uint8 ndarray.
+        """
+        raise NotImplementedError("This adapter does not support level batching.")
