@@ -27,6 +27,8 @@ _FILENAME_FORMAT: dict[str, str] = {
 }
 
 _SAMPLE_INDEX = {"a": 1, "b": 2, "c": 3, "d": 4}
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_DEFAULT_OUTPUTS_ROOT = _PROJECT_ROOT / "data" / "raw" / "ktc2023" / "reference_outputs"
 
 
 class ReferenceOutputAdapter(AlgorithmAdapter):
@@ -35,7 +37,7 @@ class ReferenceOutputAdapter(AlgorithmAdapter):
     def __init__(
         self,
         algorithm: str,
-        outputs_root: str | Path = "data/raw/ktc2023/reference_outputs",
+        outputs_root: str | Path = _DEFAULT_OUTPUTS_ROOT,
     ) -> None:
         if algorithm not in _FILENAME_FORMAT:
             raise ValueError(
@@ -73,7 +75,8 @@ class ReferenceOutputAdapter(AlgorithmAdapter):
         else:
             raise FileNotFoundError(
                 f"reference reconstruction not found: {leveled}\n"
-                "Run 'python scripts/stage_dataset.py' to populate it."
+                "To use pre-computed reference outputs: run 'python scripts/stage_dataset.py'\n"
+                "To run algorithms yourself and populate the cache: run 'python scripts/run_benchmark.py'"
             )
 
         mat = scipy.io.loadmat(str(path))
