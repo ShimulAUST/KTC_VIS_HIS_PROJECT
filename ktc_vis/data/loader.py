@@ -1,9 +1,13 @@
 """KTC2023 dataset loader. Owner: Muzammal.
 
-Reads the canonical staged dataset under ``data/raw/ktc2023/`` (populated by
-``scripts/stage_dataset.py``). The native dataset is captured at Level 1
-(32 electrodes); lower levels are produced at runtime via electrode
-subsampling — see :mod:`ktc_vis.data.subsampler`.
+Reads the canonical staged dataset under ``data/raw/ktc2023/``:
+
+    measurements/data{1..4}.mat   — Level-1 measurement (Inj, Mpat, Uel)
+    measurements/ref.mat          — empty-tank reference (Injref, Mpat, Uelref)
+    ground_truth/true{1..4}.mat   — segmentation (key: truth, 256×256 uint8)
+
+Only Level 1 is stored on disk (32 electrodes, full protocol). Higher levels
+are derived at load time via electrode subsampling.
 """
 
 from pathlib import Path
@@ -13,7 +17,11 @@ import scipy.io
 
 from ktc_vis.adapters.base import KTCMeasurement
 
-# Maps sample letter → data file index. KTC2023 ships 4 samples (1..4).
+# Absolute path so the loader works regardless of working directory.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_DEFAULT_RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
+
+# Maps sample letter → data file index.
 _SAMPLE_INDEX = {"a": 1, "b": 2, "c": 3, "d": 4}
 
 # Expected measurement counts per level (from KTC2023 paper Table 1)
@@ -34,14 +42,11 @@ class KTCDataLoader:
     Expected directory layout under ``raw_dir``::
 
         measurements/data{1..4}.mat   — measurement (Inj, Mpat, Uel)
-        measurements/ref.mat          — empty-tank reference (Injref, Mpat, Uelref)
+        measurements/ref.mat          — empty-tank reference
         ground_truth/true{1..4}.mat   — segmentation (key: truth, 256×256 uint8)
-
-    Only level=1 is stored on disk; higher levels are realised by subsampling
-    the Level-1 measurement at load time.
     """
 
-    def __init__(self, raw_dir: str | Path = "data/raw/ktc2023") -> None:
+    def __init__(self, raw_dir: str | Path = _DEFAULT_RAW_DIR) -> None:
         self.raw_dir = Path(raw_dir)
         self.measurements_dir = self.raw_dir / "measurements"
         self.ground_truth_dir = self.raw_dir / "ground_truth"
@@ -49,8 +54,11 @@ class KTCDataLoader:
     def load(self, level: int, sample: str) -> KTCMeasurement:
         """Load one ``(level, sample)`` combination from disk.
 
+        Level-1 data is read directly. Levels 2–7 are produced by subsampling
+        the Level-1 measurement at runtime.
+
         Args:
-            level: Difficulty level, 1–7. (Level > 1 not yet implemented.)
+            level: Difficulty level, 1–7.
             sample: Sample identifier, one of ``"a"``, ``"b"``, ``"c"``, ``"d"``.
 
         Returns:
@@ -59,7 +67,6 @@ class KTCDataLoader:
         Raises:
             ValueError: If ``level`` or ``sample`` is invalid.
             FileNotFoundError: If the expected ``.mat`` files are missing.
-            NotImplementedError: If ``level > 1`` (subsampling not yet wired in).
         """
         if level not in range(1, 8):
             raise ValueError(f"level must be 1–7, got {level}")
@@ -73,19 +80,15 @@ class KTCDataLoader:
         data = self._load_mat(self.measurements_dir / f"data{idx}.mat")
         gt_data = self._load_mat(self.ground_truth_dir / f"true{idx}.mat")
 
-        # Uel is stored as (n_measurements, 1) — flatten to 1-D then reshape
-        uel_flat = data["Uel"].flatten()           # (n_measurements,)
+        uel_flat = data["Uel"].flatten()
         inj = data["Inj"]                          # (32, n_injections)
-        mpat = data["Mpat"].astype(np.int16)       # (32, 31) measurement pattern
+        mpat = data["Mpat"].astype(np.int16)       # (32, 31)
         n_inj = inj.shape[1]
         n_meas_per_inj = len(uel_flat) // n_inj
 
         voltage_matrix = uel_flat.reshape(n_inj, n_meas_per_inj)
-
-        # Each column of Inj is one injection pattern across 32 electrodes
         current_matrix = inj.T                     # (n_injections, 32)
 
-        # R = V / I — use peak current magnitude per injection (avoids /0)
         current_magnitude = np.abs(current_matrix).max(axis=1, keepdims=True)
         current_magnitude = np.where(current_magnitude == 0, 1.0, current_magnitude)
         resistance_matrix = voltage_matrix / current_magnitude
@@ -100,7 +103,6 @@ class KTCDataLoader:
             level=1,
             sample=sample,
         )
-        # Attach Mpat for downstream subsampling (not part of the public dataclass)
         measurement.__dict__["mpat"] = mpat
 
         if level != 1:

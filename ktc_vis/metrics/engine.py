@@ -12,8 +12,9 @@ from ktc_vis.metrics.class_metrics import compute_confusion_matrix, compute_mean
 from ktc_vis.metrics.image_quality import compute_ssim
 from ktc_vis.metrics.shape_matching import compute_hausdorff, compute_position_error, compute_resolution
 
-RAW_DIR = Path("data/raw/ktc2023")
-_SAMPLE_INDEX = {"a": 1, "b": 2, "c": 3}
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
+_SAMPLE_INDEX = {"a": 1, "b": 2, "c": 3, "d": 4}
 
 
 class MetricsEngine:
@@ -93,8 +94,41 @@ class MetricsEngine:
 
         return metrics
 
+    def _compute_metrics_from_reconstruction(
+        self,
+        measurement: KTCMeasurement,
+        reconstruction: np.ndarray,
+        runtime: float,
+    ) -> dict:
+        """Compute all metrics given a pre-computed reconstruction array.
+
+        Used by the batch benchmark path where reconstruct_level() already ran
+        the algorithm — avoids calling the adapter a second time.
+        """
+        gt = self._load_ground_truth(measurement.level, measurement.sample)
+
+        ssim = compute_ssim(reconstruction, gt)
+        iou = compute_per_class_iou(reconstruction, gt)
+        iou_mean = compute_mean_iou(reconstruction, gt)
+        compute_confusion_matrix(reconstruction, gt)
+        hausdorff = compute_hausdorff(reconstruction, gt)
+        position_error = compute_position_error(reconstruction, gt)
+        resolution = compute_resolution(reconstruction, gt)
+
+        return {
+            "ssim": ssim,
+            "iou_water": iou["water"] if not np.isnan(iou["water"]) else 0.0,
+            "iou_resistive": iou["resistive"] if not np.isnan(iou["resistive"]) else 0.0,
+            "iou_conductive": iou["conductive"] if not np.isnan(iou["conductive"]) else 0.0,
+            "iou_mean": iou_mean,
+            "hausdorff": hausdorff,
+            "position_error": position_error,
+            "resolution": resolution,
+            "runtime": runtime,
+        }
+
     @staticmethod
     def _load_ground_truth(level: int, sample: str) -> np.ndarray:
         idx = _SAMPLE_INDEX[sample]
-        gt_path = RAW_DIR / f"level{level}" / f"{idx}_true.mat"
+        gt_path = RAW_DIR / "ground_truth" / f"true{idx}.mat"
         return scipy.io.loadmat(str(gt_path))["truth"].astype(np.uint8)
