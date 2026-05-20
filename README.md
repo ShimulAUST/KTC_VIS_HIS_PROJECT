@@ -163,7 +163,7 @@ KTC .mat files (Zenodo)
          │
          ▼
 ┌─────────────────┐
-│  Metrics Engine │  14 metrics × 3 algorithms × 7 levels × 3 samples
+│  Metrics Engine │  14 metrics × 3 algorithms × 7 levels × 4 samples
 │  (HDF5 cache)   │
 └────────┬────────┘
          │
@@ -216,7 +216,10 @@ conda activate KTC_VIS_HIS_PROJECT
 # 3. Download the KTC2023 dataset (Zenodo v3)
 #    Place .mat files under data/raw/ktc2023/
 
-# 4. Run the data loader to populate the HDF5 cache
+# 4. Populate the HDF5 cache (choose one):
+#    Fast — use pre-computed reference outputs (no Docker needed):
+python scripts/populate_cache_from_reference.py
+#    Full — run live algorithms via Docker (takes hours):
 python scripts/run_benchmark.py --config configs/experiment.yaml
 
 # 5. Launch the dashboard
