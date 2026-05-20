@@ -24,8 +24,8 @@ from ktc_vis.dashboard.theme import (
 )
 
 _ALGORITHMS = [
-    {"label": "ABC1",   "value": "abc1"},
-    {"label": "CUQI8",  "value": "cuqi8"},
+    {"label": "ABC1", "value": "abc1"},
+    {"label": "CUQI8", "value": "cuqi8"},
     {"label": "PNPE2E", "value": "pnpe2e"},
 ]
 _SAMPLES = [
