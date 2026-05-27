@@ -1,29 +1,866 @@
-"""Module 3: Side-by-Side Comparison Grid. Owner: Asmita Bhuva."""
+"""Module 3: Side-by-Side Comparison Grid.
 
-from dash import html
+Three-column grid showing **all three algorithms** (ABC1, CUQI8, PNPE2E) for
+the currently selected ``(level, sample)`` triple simultaneously.
 
+Layout
+------
+    Row 1  — Algorithm reconstructions (3-column grid)
+    Row 2  — Pairwise pixel-difference images (3 pairs)
+    Row 3  — Voltage measurement chart  +  Metrics scorecard
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+import numpy as np
+import plotly.graph_objects as go
+import scipy.io
+from dash import Input, Output, dcc, html
+
+from ktc_vis.adapters import ReferenceOutputAdapter
+from ktc_vis.data.loader import KTCDataLoader
+from ktc_vis.dashboard.theme import (
+    ACCENT,
+    BORDER,
+    CARD,
+    CARD_STYLE,
+    DANGER,
+    MUTED,
+    SUCCESS,
+    TEXT,
+    WARN,
+)
+from ktc_vis.utils.figures import (
+    CLASS_COLORS,
+    empty_figure,
+)
+
+logger = logging.getLogger(__name__)
+
+# ── Project paths ──────────────────────────────────────────────────────────────
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
+_CACHE_PATH = _PROJECT_ROOT / "data" / "cache" / "results.h5"
+_SAMPLE_MAP = {"a": 1, "b": 2, "c": 3, "d": 4}
+
+# ── Algorithm registry ─────────────────────────────────────────────────────────
+_ALGORITHMS: list[str] = ["abc1", "cuqi8", "pnpe2e"]
+_ALG_COLORS: dict[str, str] = {
+    "abc1":   "#5b8def",   # blue
+    "cuqi8":  "#e85d75",   # pink
+    "pnpe2e": "#f4c870",   # gold
+}
+
+# ── Singletons ─────────────────────────────────────────────────────────────────
+_LOADER = KTCDataLoader()
+_ADAPTERS: dict[str, ReferenceOutputAdapter] = {}
+
+
+def _get_adapter(name: str) -> ReferenceOutputAdapter:
+    if name not in _ADAPTERS:
+        _ADAPTERS[name] = ReferenceOutputAdapter(name)
+    return _ADAPTERS[name]
+
+
+# ── IDs (all prefixed with ``m3-``) ───────────────────────────────────────────
+_CHIPS_ID   = "m3-chips"
+_BANNER_ID  = "m3-banner"
+# Reconstruction row
+_RECON_IDS  = {alg: f"m3-recon-{alg}" for alg in _ALGORITHMS}
+# Pairwise diff row
+_DIFF_PAIRS = [("abc1", "cuqi8"), ("abc1", "pnpe2e"), ("cuqi8", "pnpe2e")]
+_DIFF_IDS   = {(a, b): f"m3-diff-{a}-{b}" for a, b in _DIFF_PAIRS}
+# Bottom row
+_VOLTAGE_ID = "m3-voltage-chart"
+_SCORE_ID   = "m3-scorecard"
+
+# ── Shared style helpers ───────────────────────────────────────────────────────
+_PANEL_HDR = {
+    "display": "flex",
+    "alignItems": "center",
+    "justifyContent": "space-between",
+    "padding": "10px 14px",
+    "borderBottom": f"1px solid {BORDER}",
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Layout
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def layout() -> html.Div:
-    return html.Div([
-        html.H3("Algorithm Comparison Grid", style={"color": "#eee"}),
-        html.P(
-            "3-column grid (ABC1 | CUQI8 | PNPE2E) with pairwise difference images "
-            "and SSIM score table.",
-            style={"color": "#aaa"},
-        ),
-        _coming_soon(),
-    ], style={"padding": "20px"})
-
-
-def register_callbacks(app) -> None:  # noqa: ANN001
-    """Register M3 callbacks. TODO: implement in Asmita's sprint."""
-
-
-def _coming_soon() -> html.Div:
+    """Three-section layout: reconstructions → diffs → voltage + scorecard."""
     return html.Div(
-        "Pending implementation — requires benchmark cache.",
+        [
+            _header(),
+            html.Div(id=_CHIPS_ID, children=[_chip("status", "loading…")],
+                     style={"display": "flex", "flexWrap": "wrap", "gap": "8px"}),
+            html.Div(id=_BANNER_ID),
+
+            # ── Row 1: reconstructions ────────────────────────────────────────
+            _section_label(
+                "Algorithm Reconstructions",
+                "All three algorithms at the same level and sample — select any "
+                "tab to inspect the highlighted algorithm in detail via M1.",
+            ),
+            _recon_grid(),
+
+            # ── Row 2: pairwise differences ───────────────────────────────────
+            _section_label(
+                "Pairwise Pixel Differences",
+                "Diverging map: purple = A classifies higher, gold = B classifies higher, "
+                "dark = both agree.",
+            ),
+            _diff_grid(),
+
+            # ── Row 3: voltage chart + metrics scorecard ──────────────────────
+            _section_label(
+                "Measurement Data & Metrics",
+                "Left: measured voltage pattern (rows = injections, cols = channels). "
+                "Right: per-algorithm quality scores from the benchmark cache.",
+            ),
+            _bottom_row(),
+        ],
         style={
-            "backgroundColor": "#2a2a3f", "color": "#666", "borderRadius": "8px",
-            "padding": "40px", "textAlign": "center", "marginTop": "20px",
+            "padding": "24px 28px",
+            "minHeight": "100%",
+            "display": "flex",
+            "flexDirection": "column",
+            "gap": "14px",
         },
     )
+
+
+# ── Section building blocks ────────────────────────────────────────────────────
+
+def _header() -> html.Div:
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Span(
+                        "M3",
+                        style={
+                            "display": "inline-block",
+                            "padding": "2px 10px",
+                            "borderRadius": "999px",
+                            "backgroundColor": "#00b894",
+                            "color": "#fff",
+                            "fontSize": "11px",
+                            "fontWeight": 600,
+                            "letterSpacing": "0.5px",
+                            "marginRight": "10px",
+                        },
+                    ),
+                    html.Span(
+                        "Side-by-Side Comparison Grid",
+                        style={"color": TEXT, "fontSize": "20px", "fontWeight": 600},
+                    ),
+                ]
+            ),
+            html.P(
+                "Displays ABC1, CUQI8, and PNPE2E for the same (level, sample) "
+                "simultaneously. Pairwise difference images reveal where algorithms "
+                "disagree. The voltage heatmap shows the raw measurement data each "
+                "algorithm received, and the scorecard compares quality metrics "
+                "from the benchmark cache.",
+                style={"color": MUTED, "margin": "8px 0 0", "fontSize": "13px",
+                       "lineHeight": "1.5"},
+            ),
+        ],
+        style={**CARD_STYLE, "padding": "16px 20px",
+               "borderLeft": "3px solid #00b894"},
+    )
+
+
+def _section_label(title: str, subtitle: str) -> html.Div:
+    return html.Div(
+        [
+            html.Span(title, style={
+                "color": TEXT, "fontWeight": 600, "fontSize": "12px",
+                "letterSpacing": "0.8px", "textTransform": "uppercase",
+                "marginRight": "10px",
+            }),
+            html.Span(subtitle, style={"color": MUTED, "fontSize": "12px"}),
+        ],
+        style={
+            "display": "flex", "alignItems": "baseline",
+            "padding": "4px 2px 0", "borderBottom": f"1px dashed {BORDER}",
+            "paddingBottom": "6px", "marginTop": "4px",
+        },
+    )
+
+
+def _recon_grid() -> html.Div:
+    panels = [
+        _image_panel(
+            title=alg.upper(),
+            subtitle=f"{alg.upper()} segmentation output",
+            graph_id=_RECON_IDS[alg],
+            badge_color=_ALG_COLORS[alg],
+        )
+        for alg in _ALGORITHMS
+    ]
+    return html.Div(
+        panels,
+        style={
+            "display": "grid",
+            "gridTemplateColumns": "repeat(3, 1fr)",
+            "gap": "14px",
+        },
+    )
+
+
+def _diff_grid() -> html.Div:
+    panels = []
+    for a, b in _DIFF_PAIRS:
+        label = f"{a.upper()} − {b.upper()}"
+        panels.append(
+            _image_panel(
+                title=label,
+                subtitle="Pixel-class difference (diverging scale −2 … +2)",
+                graph_id=_DIFF_IDS[(a, b)],
+                badge="Δ",
+                badge_color="#a07bff",
+                height=300,
+            )
+        )
+    return html.Div(
+        panels,
+        style={
+            "display": "grid",
+            "gridTemplateColumns": "repeat(3, 1fr)",
+            "gap": "14px",
+        },
+    )
+
+
+def _bottom_row() -> html.Div:
+    voltage_panel = html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                "V",
+                                style={
+                                    "display": "inline-block",
+                                    "padding": "2px 8px",
+                                    "borderRadius": "6px",
+                                    "backgroundColor": "#00b894",
+                                    "color": "#fff",
+                                    "fontSize": "10px",
+                                    "fontWeight": 700,
+                                    "marginRight": "10px",
+                                },
+                            ),
+                            html.Span("Voltage Measurement Pattern",
+                                      style={"color": TEXT, "fontWeight": 600,
+                                             "fontSize": "13.5px"}),
+                        ]
+                    ),
+                    html.Span("rows = injections · cols = measurement channels",
+                              style={"color": MUTED, "fontSize": "11.5px"}),
+                ],
+                style=_PANEL_HDR,
+            ),
+            html.Div(
+                dcc.Graph(
+                    id=_VOLTAGE_ID,
+                    figure=empty_figure("Loading…"),
+                    config={"displayModeBar": False, "responsive": True},
+                    style={"height": "300px", "width": "100%"},
+                ),
+                style={"padding": "6px 6px 10px"},
+            ),
+        ],
+        style={
+            **CARD_STYLE,
+            "flex": "2",
+            "display": "flex",
+            "flexDirection": "column",
+        },
+    )
+
+    scorecard_panel = html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                "★",
+                                style={
+                                    "display": "inline-block",
+                                    "padding": "2px 8px",
+                                    "borderRadius": "6px",
+                                    "backgroundColor": WARN,
+                                    "color": "#111",
+                                    "fontSize": "10px",
+                                    "fontWeight": 700,
+                                    "marginRight": "10px",
+                                },
+                            ),
+                            html.Span("Metrics Scorecard",
+                                      style={"color": TEXT, "fontWeight": 600,
+                                             "fontSize": "13.5px"}),
+                        ]
+                    ),
+                    html.Span("from benchmark cache",
+                              style={"color": MUTED, "fontSize": "11.5px"}),
+                ],
+                style=_PANEL_HDR,
+            ),
+            html.Div(
+                id=_SCORE_ID,
+                children=_scorecard_placeholder(),
+                style={
+                    "padding": "12px 14px",
+                    "flex": "1",
+                    "overflowY": "auto",
+                },
+            ),
+        ],
+        style={
+            **CARD_STYLE,
+            "flex": "1",
+            "display": "flex",
+            "flexDirection": "column",
+        },
+    )
+
+    return html.Div(
+        [voltage_panel, scorecard_panel],
+        style={"display": "flex", "gap": "14px", "alignItems": "stretch"},
+    )
+
+
+def _scorecard_placeholder() -> list:
+    return [
+        html.P(
+            "Run scripts/run_benchmark.py to populate the cache.",
+            style={"color": MUTED, "fontSize": "12px", "fontStyle": "italic",
+                   "marginTop": "20px", "textAlign": "center"},
+        )
+    ]
+
+
+def _image_panel(
+    title: str,
+    subtitle: str,
+    graph_id: str,
+    *,
+    badge: str = "",
+    badge_color: str = ACCENT,
+    height: int = 340,
+) -> html.Div:
+    """Reusable card containing a single dcc.Graph."""
+    badge_text = badge if badge else title[:4]
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                badge_text,
+                                style={
+                                    "display": "inline-block",
+                                    "padding": "2px 8px",
+                                    "borderRadius": "6px",
+                                    "backgroundColor": badge_color,
+                                    "color": "#fff" if badge_color != WARN else "#111",
+                                    "fontSize": "10px",
+                                    "fontWeight": 700,
+                                    "letterSpacing": "0.4px",
+                                    "marginRight": "10px",
+                                },
+                            ),
+                            html.Span(title, style={"color": TEXT, "fontWeight": 600,
+                                                    "fontSize": "13.5px"}),
+                        ]
+                    ),
+                    html.Span(subtitle, style={"color": MUTED, "fontSize": "11.5px"}),
+                ],
+                style=_PANEL_HDR,
+            ),
+            html.Div(
+                dcc.Graph(
+                    id=graph_id,
+                    figure=empty_figure("Loading…"),
+                    config={"displayModeBar": False, "responsive": True},
+                    style={"height": f"{height}px", "width": "100%"},
+                ),
+                style={"padding": "6px 6px 10px", "flex": "1"},
+            ),
+        ],
+        style={
+            **CARD_STYLE,
+            "display": "flex",
+            "flexDirection": "column",
+            "overflow": "hidden",
+        },
+    )
+
+
+def _chip(label: str, value: str, accent: str | None = None) -> html.Div:
+    return html.Div(
+        [
+            html.Span(label, style={
+                "color": MUTED, "fontSize": "10.5px", "letterSpacing": "0.6px",
+                "textTransform": "uppercase", "marginRight": "8px",
+            }),
+            html.Span(value, style={
+                "color": accent or TEXT, "fontSize": "13px",
+                "fontWeight": 600, "fontVariantNumeric": "tabular-nums",
+            }),
+        ],
+        style={
+            **CARD_STYLE,
+            "padding": "8px 12px",
+            "display": "inline-flex",
+            "alignItems": "center",
+        },
+    )
+
+
+def _banner(message: str, kind: str = "info") -> html.Div:
+    palette = {
+        "info":  ("#1f3a5f", "#5b8def", "#cfe0ff"),
+        "warn":  ("#3a2a1a", WARN,      "#f4c870"),
+        "error": ("#3a1f25", DANGER,    "#ffd1d8"),
+    }
+    bg, border, fg = palette.get(kind, palette["info"])
+    return html.Div(message, style={
+        "backgroundColor": bg, "border": f"1px solid {border}",
+        "color": fg, "padding": "10px 14px",
+        "borderRadius": "10px", "fontSize": "12.5px",
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Figure builders
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SEG_COLORSCALE = [
+    [0.00, CLASS_COLORS[0]],
+    [0.33, CLASS_COLORS[0]],
+    [0.34, CLASS_COLORS[1]],
+    [0.66, CLASS_COLORS[1]],
+    [0.67, CLASS_COLORS[2]],
+    [1.00, CLASS_COLORS[2]],
+]
+
+_DIFF_COLORSCALE = [
+    [0.0,  "#7b61ff"],   # −2: A much higher (purple)
+    [0.25, "#a07bff"],   # −1
+    [0.5,  "#1e1e2f"],   # 0: identical (dark background)
+    [0.75, "#f4c870"],   # +1
+    [1.0,  "#e8a030"],   # +2: B much higher (gold)
+]
+
+
+def _base_layout(title: str) -> dict:
+    return dict(
+        title=dict(text=title, x=0.5, font=dict(color="#ddd", size=11)),
+        paper_bgcolor=CARD,
+        plot_bgcolor="#1a1a2e",
+        margin=dict(l=8, r=8, t=28, b=8),
+        autosize=True,
+        xaxis=dict(visible=False, scaleanchor="y", scaleratio=1),
+        yaxis=dict(visible=False, autorange="reversed"),
+        uirevision="constant",
+    )
+
+
+def _recon_figure(recon: np.ndarray, alg: str, level: int, sample: str) -> go.Figure:
+    """3-class segmentation heatmap for one algorithm."""
+    fig = go.Figure(
+        go.Heatmap(
+            z=recon.astype(float),
+            colorscale=_SEG_COLORSCALE,
+            zmin=0, zmax=2,
+            showscale=False,
+            hovertemplate="x:%{x}<br>y:%{y}<br>class:%{z}<extra></extra>",
+        )
+    )
+    fig.update_layout(**_base_layout(f"{alg.upper()} · L{level}/{sample.upper()}"))
+    return fig
+
+
+def _diff_figure(
+    recon_a: np.ndarray, recon_b: np.ndarray,
+    alg_a: str, alg_b: str, level: int, sample: str,
+) -> go.Figure:
+    """Diverging pixel-class difference: A − B, range −2…+2."""
+    diff = recon_a.astype(np.int16) - recon_b.astype(np.int16)
+    n_disagree = int(np.count_nonzero(diff))
+    pct = n_disagree / diff.size * 100
+
+    fig = go.Figure(
+        go.Heatmap(
+            z=diff,
+            colorscale=_DIFF_COLORSCALE,
+            zmin=-2, zmax=2,
+            showscale=True,
+            colorbar=dict(
+                thickness=8, len=0.7,
+                tickvals=[-2, -1, 0, 1, 2],
+                tickfont=dict(color="#ccc", size=9),
+            ),
+            hovertemplate=(
+                "x:%{x}<br>y:%{y}<br>A−B:%{z}"
+                f"<extra>{alg_a.upper()}−{alg_b.upper()}</extra>"
+            ),
+        )
+    )
+    fig.update_layout(
+        **_base_layout(
+            f"{alg_a.upper()}−{alg_b.upper()} · L{level}/{sample.upper()} "
+            f"· {pct:.1f}% disagree"
+        )
+    )
+    return fig
+
+
+def _voltage_figure(measurement) -> go.Figure:
+    """Heatmap of the voltage measurement matrix (injections × channels)."""
+    V = measurement.voltage_matrix  # (n_inj, n_channels)
+
+    # Normalise each injection row to highlight pattern shape, not magnitude
+    row_max = np.abs(V).max(axis=1, keepdims=True)
+    row_max = np.where(row_max == 0, 1.0, row_max)
+    V_norm = V / row_max
+
+    n_inj, n_ch = V.shape
+    fig = go.Figure(
+        go.Heatmap(
+            z=V_norm,
+            colorscale="RdBu",
+            zmid=0,
+            showscale=True,
+            colorbar=dict(
+                thickness=8, len=0.8,
+                title=dict(text="norm. V", font=dict(color=MUTED, size=9),
+                           side="right"),
+                tickfont=dict(color=MUTED, size=9),
+            ),
+            hovertemplate=(
+                "inj:%{y}<br>ch:%{x}<br>norm-V:%{z:.3f}<extra></extra>"
+            ),
+        )
+    )
+    fig.update_layout(
+        paper_bgcolor=CARD,
+        plot_bgcolor="#1a1a2e",
+        margin=dict(l=48, r=48, t=36, b=36),
+        title=dict(
+            text=(
+                f"Voltage Matrix · L{measurement.level}/{measurement.sample.upper()} "
+                f"· {n_inj} injections × {n_ch} channels"
+            ),
+            x=0.5, font=dict(color="#ddd", size=11),
+        ),
+        xaxis=dict(
+            title=dict(text="Measurement channel", font=dict(color=MUTED, size=10)),
+            tickfont=dict(color=MUTED, size=9),
+            gridcolor="#2e2e44", zeroline=False,
+        ),
+        yaxis=dict(
+            title=dict(text="Injection pattern", font=dict(color=MUTED, size=10)),
+            tickfont=dict(color=MUTED, size=9),
+            gridcolor="#2e2e44", zeroline=False,
+            autorange="reversed",
+        ),
+        uirevision="constant",
+    )
+    return fig
+
+
+# ── Metrics scorecard ──────────────────────────────────────────────────────────
+
+_METRIC_KEYS = [
+    ("ssim",       "SSIM",           True,   ".3f"),
+    ("iou_mean",   "Mean IoU",       True,   ".3f"),
+    ("hausdorff",  "Hausdorff (px)", False,  ".1f"),
+]
+
+
+def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
+    """Return scalar metrics dict from cache, or None if unavailable."""
+    try:
+        import h5py
+        if not _CACHE_PATH.exists():
+            return None
+        key = f"results/{algorithm}/{level}/{sample}"
+        with h5py.File(str(_CACHE_PATH), "r") as f:
+            if key not in f:
+                return None
+            grp = f[key]
+            return {
+                k: float(grp[k][()])
+                for k in grp.keys()
+                if k != "reconstruction"
+            }
+    except Exception:
+        return None
+
+
+def _scorecard_children(
+    level: int, sample: str, selected_alg: str
+) -> list:
+    """Build the metrics scorecard table rows."""
+    all_metrics: dict[str, dict | None] = {
+        alg: _try_load_metrics(alg, level, sample) for alg in _ALGORITHMS
+    }
+
+    if all(v is None for v in all_metrics.values()):
+        return _scorecard_placeholder()
+
+    rows: list = []
+
+    # ── Header row ────────────────────────────────────────────────────────────
+    header_cells = [
+        html.Th("Metric", style=_th_style()),
+    ] + [
+        html.Th(
+            alg.upper(),
+            style={
+                **_th_style(),
+                "color": _ALG_COLORS[alg],
+                "borderBottom": f"2px solid {_ALG_COLORS[alg]}",
+                "fontWeight": 700 if alg == selected_alg else 500,
+            },
+        )
+        for alg in _ALGORITHMS
+    ]
+    rows.append(html.Tr(header_cells))
+
+    # ── Data rows ─────────────────────────────────────────────────────────────
+    for key, label, higher_better, fmt in _METRIC_KEYS:
+        # Collect values
+        vals: dict[str, float | None] = {
+            alg: (all_metrics[alg].get(key) if all_metrics[alg] else None)
+            for alg in _ALGORITHMS
+        }
+        numeric = [v for v in vals.values() if v is not None]
+        if not numeric:
+            continue
+
+        best = max(numeric) if higher_better else min(numeric)
+
+        cells = [html.Td(label, style=_td_label_style())]
+        for alg in _ALGORITHMS:
+            v = vals[alg]
+            if v is None:
+                cells.append(html.Td("—", style=_td_style(False, False)))
+            else:
+                is_best = abs(v - best) < 1e-9
+                cells.append(
+                    html.Td(
+                        [
+                            html.Span(
+                                format(v, fmt),
+                                style={"fontVariantNumeric": "tabular-nums"},
+                            ),
+                            html.Span(
+                                " ★",
+                                style={"color": SUCCESS, "fontSize": "9px"},
+                            ) if is_best else None,
+                        ],
+                        style=_td_style(is_best, alg == selected_alg),
+                    )
+                )
+        rows.append(html.Tr(cells, style={"borderBottom": f"1px solid {BORDER}"}))
+
+    if not rows:
+        return _scorecard_placeholder()
+
+    return [
+        html.Table(
+            rows,
+            style={
+                "width": "100%",
+                "borderCollapse": "collapse",
+                "fontSize": "12px",
+            },
+        ),
+        html.P(
+            f"★ = best for that metric · highlighted column = sidebar selection ({selected_alg.upper()})",
+            style={"color": MUTED, "fontSize": "10px", "marginTop": "10px"},
+        ),
+    ]
+
+
+def _th_style() -> dict:
+    return {
+        "padding": "8px 10px",
+        "textAlign": "left",
+        "color": MUTED,
+        "fontWeight": 600,
+        "fontSize": "10.5px",
+        "letterSpacing": "0.5px",
+        "textTransform": "uppercase",
+        "borderBottom": f"1px solid {BORDER}",
+    }
+
+
+def _td_label_style() -> dict:
+    return {
+        "padding": "8px 10px",
+        "color": MUTED,
+        "fontSize": "11.5px",
+    }
+
+
+def _td_style(is_best: bool, is_selected: bool) -> dict:
+    return {
+        "padding": "8px 10px",
+        "color": SUCCESS if is_best else TEXT,
+        "fontWeight": 700 if is_best else 400,
+        "backgroundColor": "#1f2a3a" if is_selected else "transparent",
+        "borderRadius": "4px",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Data loading helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None:
+    """Try cache first, then fall back to ReferenceOutputAdapter."""
+    # 1. Cache
+    try:
+        from ktc_vis.cache.hdf5_store import load_result
+        _, recon = load_result(alg, level, sample, cache_path=_CACHE_PATH)
+        return recon.astype(np.uint8)
+    except Exception:
+        pass
+
+    # 2. Live adapter
+    try:
+        measurement = _LOADER.load(level=level, sample=sample)
+        adapter = _get_adapter(alg)
+        return adapter.reconstruct(measurement).astype(np.uint8)
+    except Exception as exc:
+        logger.warning("M3 could not load %s L%s/%s: %s", alg, level, sample, exc)
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Callbacks
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def register_callbacks(app) -> None:  # noqa: ANN001
+    """Wire sidebar selectors to all M3 panels."""
+
+    # Flat output list: recon figures + diff figures + voltage + scorecard + chips + banner
+    recon_outputs  = [Output(_RECON_IDS[alg], "figure") for alg in _ALGORITHMS]
+    diff_outputs   = [Output(_DIFF_IDS[pair], "figure") for pair in _DIFF_PAIRS]
+    other_outputs  = [
+        Output(_VOLTAGE_ID, "figure"),
+        Output(_SCORE_ID,   "children"),
+        Output(_CHIPS_ID,   "children"),
+        Output(_BANNER_ID,  "children"),
+    ]
+
+    @app.callback(
+        *recon_outputs,
+        *diff_outputs,
+        *other_outputs,
+        Input("sidebar-level-slider",      "value"),
+        Input("sidebar-sample-radio",      "value"),
+        Input("sidebar-algorithm-dropdown", "value"),
+    )
+    def _update_all(level: int, sample: str, selected_alg: str):
+        level = int(level)
+
+        # ── 1. Load measurement (needed for voltage chart) ────────────────────
+        measurement = None
+        banner = None
+        try:
+            measurement = _LOADER.load(level=level, sample=sample)
+        except FileNotFoundError as exc:
+            logger.warning("M3 measurement missing: %s", exc)
+            banner = _banner(str(exc), "error")
+        except Exception as exc:
+            logger.exception("M3 measurement load failed")
+            banner = _banner(f"Measurement load error: {exc}", "warn")
+
+        # ── 2. Load all three reconstructions ─────────────────────────────────
+        recons: dict[str, np.ndarray | None] = {
+            alg: _load_reconstruction(alg, level, sample)
+            for alg in _ALGORITHMS
+        }
+        n_loaded = sum(1 for v in recons.values() if v is not None)
+
+        # ── 3. Build reconstruction figures ───────────────────────────────────
+        recon_figs = []
+        for alg in _ALGORITHMS:
+            r = recons[alg]
+            if r is not None:
+                recon_figs.append(_recon_figure(r, alg, level, sample))
+            else:
+                recon_figs.append(
+                    empty_figure(f"No data for {alg.upper()}\nRun benchmark")
+                )
+
+        # ── 4. Build pairwise difference figures ──────────────────────────────
+        diff_figs = []
+        for alg_a, alg_b in _DIFF_PAIRS:
+            ra = recons[alg_a]
+            rb = recons[alg_b]
+            if ra is not None and rb is not None:
+                diff_figs.append(
+                    _diff_figure(ra, rb, alg_a, alg_b, level, sample)
+                )
+            else:
+                missing = alg_a if ra is None else alg_b
+                diff_figs.append(
+                    empty_figure(f"Missing: {missing.upper()}")
+                )
+
+        # ── 5. Voltage figure ─────────────────────────────────────────────────
+        if measurement is not None:
+            voltage_fig = _voltage_figure(measurement)
+        else:
+            voltage_fig = empty_figure("Measurement data unavailable")
+
+        # ── 6. Scorecard ──────────────────────────────────────────────────────
+        scorecard = _scorecard_children(level, sample, selected_alg)
+
+        # ── 7. Chips ──────────────────────────────────────────────────────────
+        chips = [
+            _chip("level",  f"L{level}",      accent=WARN),
+            _chip("sample", sample.upper(),   accent="#cfe0ff"),
+            _chip("loaded", f"{n_loaded}/3",
+                  accent=SUCCESS if n_loaded == 3 else DANGER),
+        ]
+        if measurement is not None:
+            n_inj, n_ch = measurement.voltage_matrix.shape
+            chips += [
+                _chip("injections",  str(n_inj)),
+                _chip("V channels",  str(n_ch)),
+            ]
+        # Per-algorithm agreement chips
+        if measurement is not None:
+            gt = measurement.ground_truth.astype(np.uint8)
+            for alg in _ALGORITHMS:
+                r = recons[alg]
+                if r is not None:
+                    agr = float((r == gt).mean()) * 100.0
+                    chips.append(
+                        _chip(
+                            alg.upper(),
+                            f"{agr:.1f}%",
+                            accent=SUCCESS if agr >= 90 else (
+                                WARN if agr >= 70 else DANGER
+                            ),
+                        )
+                    )
+
+        return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
