@@ -591,22 +591,33 @@ _METRIC_KEYS = [
 
 
 def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
-    """Return scalar metrics dict from cache, or None if unavailable."""
+    """Return metrics from cache, or compute on-the-fly if reconstruction available."""
+    # 1. Try cache first
     try:
         import h5py
-        if not _CACHE_PATH.exists():
-            return None
-        key = f"results/{algorithm}/{level}/{sample}"
-        with h5py.File(str(_CACHE_PATH), "r") as f:
-            if key not in f:
-                return None
-            grp = f[key]
-            return {
-                k: float(grp[k][()])
-                for k in grp.keys()
-                if k != "reconstruction"
-            }
+        if _CACHE_PATH.exists():
+            key = f"results/{algorithm}/{level}/{sample}"
+            with h5py.File(str(_CACHE_PATH), "r") as f:
+                if key in f:
+                    grp = f[key]
+                    return {
+                        k: float(grp[k][()])
+                        for k in grp.keys()
+                        if k != "reconstruction"
+                    }
     except Exception:
+        pass
+
+    # 2. Try to compute metrics if reconstruction can be loaded
+    try:
+        measurement = _LOADER.load(level=level, sample=sample)
+        adapter = _get_adapter(algorithm)
+        from ktc_vis.metrics.engine import MetricsEngine
+        engine = MetricsEngine(adapter, cache_path=_CACHE_PATH)
+        return engine.compute_all(measurement)
+    except Exception as exc:
+        logger.debug("M3 metrics computation failed for %s L%d/%s: %s",
+                     algorithm, level, sample, exc)
         return None
 
 
