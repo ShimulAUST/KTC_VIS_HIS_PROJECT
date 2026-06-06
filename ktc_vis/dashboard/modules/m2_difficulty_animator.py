@@ -184,16 +184,29 @@ def layout() -> html.Div:
                         "More sensitive to small regions than IoU."),
         ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
-        # ── Degradation curves (row 2: shape + speed) ─────────────────────────
+        # ── Degradation curves (row 2: shape metrics) ─────────────────────────
         html.Div([
             _curve_card("Hausdorff Distance (px)  ·  lower is better",
                         "m2-hausdorff-graph",
                         "Worst-case boundary error in pixels: the maximum distance between predicted "
                         "and true inclusion edges. Rises sharply when inclusions are smeared or missed."),
-            _curve_card("Runtime (s)  ·  lower is faster",
+            _curve_card("Position Error (px)  ·  lower is better",
+                        "m2-poserr-graph",
+                        "Euclidean distance between predicted and true inclusion centroids. "
+                        "Indicates whether the algorithm puts inclusions in the right place."),
+            _curve_card("Resolution (px)  ·  smaller = finer detail",
+                        "m2-resolution-graph",
+                        "Diameter of the smallest detected inclusion. "
+                        "Grows as measurement sparsity blurs fine structures."),
+        ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
+
+        # ── Degradation curves (row 3: speed) ─────────────────────────────────
+        html.Div([
+            _curve_card("Runtime (s)  ·  lower is faster  ·  axis 0–60 s",
                         "m2-runtime-graph",
                         "Wall-clock seconds to produce one reconstruction. "
-                        "Available only when running live algorithms via scripts/run_benchmark.py."),
+                        "Y-axis is fixed (0–60 s) so values are directly comparable across algorithms. "
+                        "Available only when running live algorithms via scripts/benchmark_runtime_*.py."),
         ], style={"display": "flex", "gap": "12px", "marginBottom": "20px"}),
 
         # ── Dynamic commentary section label ──────────────────────────────────
@@ -342,12 +355,33 @@ def _image_layout(title: str) -> dict:
     }
 
 
+# Runtime values below this threshold (seconds) are treated as synthetic:
+# the reference-output cache fills runtime with 0.0 or with the cost of reading
+# a .mat file (~1 ms), neither of which reflects real reconstruction time.
+_RUNTIME_REAL_THRESHOLD_S = 0.01
+
+# Fixed Y-axis ranges per metric so users can compare across algorithms without
+# the chart auto-rescaling on every algorithm/sample change.
+_FIXED_Y_RANGE: dict[str, tuple[float, float]] = {
+    "ssim":           (0.0, 1.0),
+    "iou_mean":       (0.0, 1.0),
+    "dice":           (0.0, 1.0),
+    "runtime":        (0.0, 60.0),   # seconds; covers ABC1/PNPE2E (~17-27s) + CUQI8 headroom
+}
+
+
 def _curve_figure(metric: str, algorithm: str, sample: str,
                   current_level: int = 1) -> go.Figure:
     """Try to load metric values from HDF5 cache; show placeholder if unavailable."""
     values = _try_load_from_cache(metric, algorithm, sample)
-    if values is not None and all(v == 0.0 for v in values):
-        values = None  # all-zero means no real measurement (e.g. runtime from reference cache)
+
+    if values is not None:
+        if metric == "runtime":
+            # Reference-output cache stores ~0s; only treat as real if any sample is meaningfully above zero.
+            if max(values) < _RUNTIME_REAL_THRESHOLD_S:
+                values = None
+        elif all(v == 0.0 for v in values):
+            values = None
 
     fig = go.Figure()
     annotation = []
@@ -365,12 +399,22 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
             line={"color": "#ffb300", "width": 1.5, "dash": "dash"},
         )
     else:
-        msg = ("No runtime data — requires live benchmark (scripts/run_benchmark.py)"
+        msg = ("Requires live benchmark — run scripts/run_benchmark.py"
                if metric == "runtime"
                else "Run scripts/run_benchmark.py to populate")
         annotation = [{"text": msg, "showarrow": False,
                        "font": {"color": _MUTED, "size": 10},
                        "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5}]
+
+    yaxis_cfg = {
+        "tickfont": {"color": _MUTED, "size": 9},
+        "gridcolor": "#2a2a3f",
+        "zeroline": False,
+    }
+    if metric in _FIXED_Y_RANGE:
+        lo, hi = _FIXED_Y_RANGE[metric]
+        yaxis_cfg["range"] = [lo, hi]
+        yaxis_cfg["autorange"] = False
 
     fig.update_layout(
         paper_bgcolor=_CARD, plot_bgcolor="#1a1a2e",
@@ -384,11 +428,7 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
             "gridcolor": "#2a2a3f",
             "zeroline": False,
         },
-        yaxis={
-            "tickfont": {"color": _MUTED, "size": 9},
-            "gridcolor": "#2a2a3f",
-            "zeroline": False,
-        },
+        yaxis=yaxis_cfg,
         annotations=annotation,
         showlegend=False,
         height=160,
@@ -403,11 +443,12 @@ def _dice_curve_figure(algorithm: str, sample: str, current_level: int = 1) -> g
         dice_vals = [2 * v / (1 + v) if (1 + v) != 0 else 0.0 for v in iou_vals]
     else:
         dice_vals = None
-    return _curve_figure_from_values(dice_vals, algorithm, sample, current_level)
+    return _curve_figure_from_values(dice_vals, algorithm, sample, current_level, metric="dice")
 
 
 def _curve_figure_from_values(
-    values: list | None, algorithm: str, sample: str, current_level: int = 1
+    values: list | None, algorithm: str, sample: str, current_level: int = 1,
+    metric: str | None = None,
 ) -> go.Figure:
     """Like _curve_figure but accepts pre-computed values instead of a metric name."""
     fig = go.Figure()
@@ -425,6 +466,14 @@ def _curve_figure_from_values(
         annotation = [{"text": "Run scripts/run_benchmark.py to populate",
                        "showarrow": False, "font": {"color": _MUTED, "size": 10},
                        "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5}]
+
+    yaxis_cfg = {"tickfont": {"color": _MUTED, "size": 9},
+                 "gridcolor": "#2a2a3f", "zeroline": False}
+    if metric and metric in _FIXED_Y_RANGE:
+        lo, hi = _FIXED_Y_RANGE[metric]
+        yaxis_cfg["range"] = [lo, hi]
+        yaxis_cfg["autorange"] = False
+
     fig.update_layout(
         paper_bgcolor=_CARD, plot_bgcolor="#1a1a2e",
         margin={"l": 36, "r": 8, "t": 8, "b": 36},
@@ -435,8 +484,7 @@ def _curve_figure_from_values(
             "tickfont": {"color": _MUTED, "size": 9},
             "gridcolor": "#2a2a3f", "zeroline": False,
         },
-        yaxis={"tickfont": {"color": _MUTED, "size": 9},
-               "gridcolor": "#2a2a3f", "zeroline": False},
+        yaxis=yaxis_cfg,
         annotations=annotation, showlegend=False, height=160,
         uirevision="constant",
     )
@@ -548,6 +596,24 @@ def _iou_label(v: float) -> tuple[str, str]:
     return "Poor segmentation", "#c62828"
 
 
+def _poserr_label(v: float) -> tuple[str, str]:
+    if v <= 10:
+        return "Centroid on-target", "#2e7d32"
+    if v <= 25:
+        return "Centroid offset", "#f57f17"
+    return "Centroid mislocated", "#c62828"
+
+
+def _resolution_label(v: float) -> tuple[str, str]:
+    if v <= 20:
+        return "Fine detail preserved", "#2e7d32"
+    if v <= 40:
+        return "Moderate blurring", "#558b2f"
+    if v <= 60:
+        return "Coarse only", "#f57f17"
+    return "Resolution collapse", "#c62828"
+
+
 def _trend_text(current: float, prev: float, metric: str, higher_is_better: bool) -> str:
     delta = current - prev
     pct = abs(delta / prev * 100) if prev != 0 else 0
@@ -558,7 +624,7 @@ def _trend_text(current: float, prev: float, metric: str, higher_is_better: bool
         sentiment = "worsened" if delta > 0 else "improved"
     if pct < 2:
         return f"{metric} stable ({direction}{pct:.1f}%)"
-    return f"{metric} {sentiment} {direction}{pct:.1f}% vs Level {''}"
+    return f"{metric} {sentiment} {direction}{pct:.1f}% (was {prev:.3f})"
 
 
 def _build_commentary(level: int, algorithm: str, sample: str) -> list:
@@ -592,6 +658,8 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     ssim_vals = _try_load_from_cache("ssim", algorithm, sample)
     iou_vals = _try_load_from_cache("iou_mean", algorithm, sample)
     hd_vals = _try_load_from_cache("hausdorff", algorithm, sample)
+    pe_vals = _try_load_from_cache("position_error", algorithm, sample)
+    res_vals = _try_load_from_cache("resolution", algorithm, sample)
 
     if ssim_vals is None and iou_vals is None and hd_vals is None:
         rows.append(html.Div(
@@ -640,6 +708,32 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
             pct = delta / hd_vals[prev_idx] * 100 if hd_vals[prev_idx] != 0 else 0
             arrow = "↑" if delta > 0 else "↓"
             color2 = "#ef5350" if delta > 0 else "#4caf50"  # higher Hausdorff = worse
+            line.append(html.Span(f"  {arrow} {abs(pct):.1f}% vs L{level - 1}",
+                                  style={"color": color2, "fontSize": "11px"}))
+        metric_items.append(html.Li(line, style={"marginBottom": "4px"}))
+
+    if pe_vals and idx < len(pe_vals):
+        v = pe_vals[idx]
+        label, color = _poserr_label(v)
+        line = [_badge(label, color), html.Span(f"Position error = {v:.1f} px", style={"color": _TEXT, "fontSize": "12px"})]
+        if prev_idx >= 0:
+            delta = v - pe_vals[prev_idx]
+            pct = delta / pe_vals[prev_idx] * 100 if pe_vals[prev_idx] != 0 else 0
+            arrow = "↑" if delta > 0 else "↓"
+            color2 = "#ef5350" if delta > 0 else "#4caf50"  # higher offset = worse
+            line.append(html.Span(f"  {arrow} {abs(pct):.1f}% vs L{level - 1}",
+                                  style={"color": color2, "fontSize": "11px"}))
+        metric_items.append(html.Li(line, style={"marginBottom": "4px"}))
+
+    if res_vals and idx < len(res_vals):
+        v = res_vals[idx]
+        label, color = _resolution_label(v)
+        line = [_badge(label, color), html.Span(f"Resolution = {v:.0f} px", style={"color": _TEXT, "fontSize": "12px"})]
+        if prev_idx >= 0:
+            delta = v - res_vals[prev_idx]
+            pct = delta / res_vals[prev_idx] * 100 if res_vals[prev_idx] != 0 else 0
+            arrow = "↑" if delta > 0 else "↓"
+            color2 = "#ef5350" if delta > 0 else "#4caf50"  # larger smallest-detected = worse detail
             line.append(html.Span(f"  {arrow} {abs(pct):.1f}% vs L{level - 1}",
                                   style={"color": color2, "fontSize": "11px"}))
         metric_items.append(html.Li(line, style={"marginBottom": "4px"}))
@@ -754,6 +848,8 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         Output("m2-iou-graph", "figure"),
         Output("m2-dice-graph", "figure"),
         Output("m2-hausdorff-graph", "figure"),
+        Output("m2-poserr-graph", "figure"),
+        Output("m2-resolution-graph", "figure"),
         Output("m2-runtime-graph", "figure"),
         Input("sidebar-algorithm-dropdown", "value"),
         Input("sidebar-sample-radio", "value"),
@@ -764,8 +860,10 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         iou_fig = _curve_figure("iou_mean", algorithm, sample, level)
         dice_fig = _dice_curve_figure(algorithm, sample, level)
         hausdorff_fig = _curve_figure("hausdorff", algorithm, sample, level)
+        poserr_fig = _curve_figure("position_error", algorithm, sample, level)
+        resolution_fig = _curve_figure("resolution", algorithm, sample, level)
         runtime_fig = _curve_figure("runtime", algorithm, sample, level)
-        return ssim_fig, iou_fig, dice_fig, hausdorff_fig, runtime_fig
+        return ssim_fig, iou_fig, dice_fig, hausdorff_fig, poserr_fig, resolution_fig, runtime_fig
 
     # ── Update dynamic commentary ─────────────────────────────────────────────
     @app.callback(
@@ -798,7 +896,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         # pixel agreement from cached reconstruction vs GT
         try:
             from ktc_vis.cache.hdf5_store import load_result
-            _, recon = load_result(algorithm, level, sample, cache_path=_CACHE_PATH)
+            metrics, recon = load_result(algorithm, level, sample, cache_path=_CACHE_PATH)
             idx = SAMPLE_MAP[sample]
             gt_path = RAW_DIR / "ground_truth" / f"true{idx}.mat"
             gt = scipy.io.loadmat(str(gt_path))["truth"].astype(np.uint8)
@@ -807,6 +905,20 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                 "pixel agreement", f"{agreement:.1f}%",
                 accent=_SUCCESS if agreement >= 90 else _WARN,
             ))
+
+            pos_err = metrics.get("position_error")
+            if pos_err is not None:
+                accent = _SUCCESS if pos_err <= 10 else (_WARN if pos_err <= 25 else _DANGER)
+                chips.append(_chip("position err", f"{pos_err:.1f} px", accent=accent))
+
+            resolution = metrics.get("resolution")
+            if resolution is not None:
+                accent = _SUCCESS if resolution <= 30 else (_WARN if resolution <= 60 else _DANGER)
+                chips.append(_chip("resolution", f"{resolution:.0f} px", accent=accent))
+
+            runtime = metrics.get("runtime")
+            if runtime is not None and runtime >= _RUNTIME_REAL_THRESHOLD_S:
+                chips.append(_chip("runtime", f"{runtime:.2f} s"))
         except Exception:
             chips.append(_chip("pixel agreement", "n/a", accent=_MUTED))
 
