@@ -726,11 +726,11 @@ def _scorecard_children(
 
     # ── Data rows ─────────────────────────────────────────────────────────────
     for key, label, higher_better, fmt in _METRIC_KEYS:
-        # Collect values
-        vals: dict[str, float | None] = {
-            alg: (all_metrics[alg].get(key) if all_metrics[alg] else None)
-            for alg in _ALGORITHMS
-        }
+        # Collect values; treat runtime=0.0 as missing (old cache used 0.0 as sentinel)
+        vals: dict[str, float | None] = {}
+        for alg in _ALGORITHMS:
+            v = all_metrics[alg].get(key) if all_metrics[alg] else None
+            vals[alg] = None if (key == "runtime" and v == 0.0) else v
         numeric = [v for v in vals.values() if v is not None]
         if not numeric:
             continue
