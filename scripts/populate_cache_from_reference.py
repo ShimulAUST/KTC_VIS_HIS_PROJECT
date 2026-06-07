@@ -76,8 +76,9 @@ def main() -> None:
                     measurement = loader.load(level, sample)
                     t0 = time.perf_counter()
                     recon = adapter.reconstruct(measurement)
+                    runtime = time.perf_counter() - t0
                     metrics = engine._compute_metrics_from_reconstruction(
-                        measurement, recon, runtime=0.0
+                        measurement, recon, runtime=runtime
                     )
                     save_result(alg, level, sample, metrics, recon, cache_path)
                     elapsed = time.perf_counter() - t0
