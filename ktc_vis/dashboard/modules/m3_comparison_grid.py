@@ -527,119 +527,56 @@ def _diff_figure(
     return fig
 
 
-_VOLT_COLORSCALE = [
-    [0.00, "#c62828"],   # -1 : vivid red
-    [0.25, "#ef9a9a"],   # -0.5: light red
-    [0.50, "#f5f5f5"],   # 0  : neutral white
-    [0.75, "#90caf9"],   # +0.5: light blue
-    [1.00, "#1565c0"],   # +1 : vivid blue
-]
-
-
 def _voltage_figure(measurement) -> go.Figure:
-    """Heatmap of the full normalised voltage measurement matrix.
-
-    Rows = injection patterns, columns = measurement channels.
-    Each row is normalised by its own peak absolute value so that
-    injection patterns with very different magnitudes are directly
-    comparable on a single diverging scale (−1 … 0 … +1).
-    Red = −1 (bottom), Blue = +1 (top).
-    """
+    """Heatmap of the voltage measurement matrix (injections × channels)."""
     V = measurement.voltage_matrix  # (n_inj, n_channels)
 
+    # Normalise each injection row to highlight pattern shape, not magnitude
     row_max = np.abs(V).max(axis=1, keepdims=True)
     row_max = np.where(row_max == 0, 1.0, row_max)
-    V_norm = V / row_max  # each row in [−1, 1]
+    V_norm = V / row_max
 
     n_inj, n_ch = V.shape
-    level  = measurement.level
-    sample = measurement.sample
-
-    # Avoid crowding tick labels on large axes
-    x_dtick = max(1, n_ch  // 12)
-    y_dtick = max(1, n_inj // 10)
-
     fig = go.Figure(
         go.Heatmap(
             z=V_norm,
-            x=list(range(1, n_ch  + 1)),
-            y=list(range(1, n_inj + 1)),
-            colorscale=_VOLT_COLORSCALE,
+            colorscale="RdBu",
             zmid=0,
-            zmin=-1,
-            zmax=1,
+            showscale=True,
             colorbar=dict(
-                title=dict(
-                    text="Norm V",
-                    font=dict(color=MUTED, size=9),
-                    side="right",
-                ),
+                thickness=8, len=0.8,
+                title=dict(text="norm. V", font=dict(color=MUTED, size=9),
+                           side="right"),
                 tickfont=dict(color=MUTED, size=9),
-                # intermediate ticks only — extremes rendered as coloured annotations
-                tickvals=[-0.5, 0, 0.5],
-                ticktext=["-0.5", "0", "+0.5"],
-                thickness=12,
-                len=0.85,
-                x=1.02,
-                y=0.5,
-                yanchor="middle",
             ),
             hovertemplate=(
-                "Injection: %{y}<br>"
-                "Channel: %{x}<br>"
-                "Norm-V: %{z:.3f}"
-                "<extra></extra>"
+                "inj:%{y}<br>ch:%{x}<br>norm-V:%{z:.3f}<extra></extra>"
             ),
         )
     )
-
     fig.update_layout(
         paper_bgcolor=CARD,
         plot_bgcolor="#1a1a2e",
-        margin=dict(l=56, r=64, t=44, b=48),
+        margin=dict(l=48, r=48, t=36, b=36),
         title=dict(
             text=(
-                f"Voltage Measurement Pattern · L{level}/{sample.upper()} "
+                f"Voltage Matrix · L{measurement.level}/{measurement.sample.upper()} "
                 f"· {n_inj} injections × {n_ch} channels"
             ),
-            x=0.5,
-            font=dict(color="#ddd", size=11),
+            x=0.5, font=dict(color="#ddd", size=11),
         ),
         xaxis=dict(
             title=dict(text="Measurement channel", font=dict(color=MUTED, size=10)),
             tickfont=dict(color=MUTED, size=9),
-            gridcolor="#2e2e44",
-            zeroline=False,
-            dtick=x_dtick,
+            gridcolor="#2e2e44", zeroline=False,
         ),
         yaxis=dict(
-            title=dict(text="Injection #", font=dict(color=MUTED, size=10)),
+            title=dict(text="Injection pattern", font=dict(color=MUTED, size=10)),
             tickfont=dict(color=MUTED, size=9),
-            gridcolor="#2e2e44",
-            zeroline=False,
-            autorange="reversed",   # injection 1 at the top
-            dtick=y_dtick,
+            gridcolor="#2e2e44", zeroline=False,
+            autorange="reversed",
         ),
         uirevision="constant",
-        # Coloured extreme labels: +1 blue (top), −1 red (bottom)
-        annotations=[
-            dict(
-                text="<b>+1</b>",
-                xref="paper", yref="paper",
-                x=1.075, y=0.925,
-                xanchor="left",
-                showarrow=False,
-                font=dict(color="#1565c0", size=11),
-            ),
-            dict(
-                text="<b>−1</b>",
-                xref="paper", yref="paper",
-                x=1.075, y=0.075,
-                xanchor="left",
-                showarrow=False,
-                font=dict(color="#c62828", size=11),
-            ),
-        ],
     )
     return fig
 
@@ -647,19 +584,9 @@ def _voltage_figure(measurement) -> go.Figure:
 # ── Metrics scorecard ──────────────────────────────────────────────────────────
 
 _METRIC_KEYS = [
-    # Image quality
-    ("ssim",            "SSIM",              True,  ".3f"),
-    # Class-specific IoU
-    ("iou_mean",        "Mean IoU",          True,  ".3f"),
-    ("iou_water",       "IoU Water",         True,  ".3f"),
-    ("iou_resistive",   "IoU Resistive",     True,  ".3f"),
-    ("iou_conductive",  "IoU Conductive",    True,  ".3f"),
-    # Shape matching
-    ("hausdorff",       "Hausdorff (px)",    False, ".1f"),
-    ("position_error",  "Position Err (px)", False, ".1f"),
-    ("resolution",      "Resolution (px)",   False, ".1f"),
-    # Data efficiency
-    ("runtime",         "Runtime (s)",       False, ".2f"),
+    ("ssim",       "SSIM",           True,   ".3f"),
+    ("iou_mean",   "Mean IoU",       True,   ".3f"),
+    ("hausdorff",  "Hausdorff (px)", False,  ".1f"),
 ]
 
 
@@ -948,5 +875,3 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     )
 
         return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
-
-
