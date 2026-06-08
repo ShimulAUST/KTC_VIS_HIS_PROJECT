@@ -8,13 +8,28 @@ import scipy.io
 
 from ktc_vis.adapters.base import AlgorithmAdapter, KTCMeasurement
 from ktc_vis.cache.hdf5_store import is_cached, load_result, save_result
-from ktc_vis.metrics.class_metrics import compute_confusion_matrix, compute_mean_iou, compute_per_class_iou
-from ktc_vis.metrics.image_quality import compute_ssim
+from ktc_vis.metrics.class_metrics import (
+    compute_confusion_matrix,
+    compute_mean_dice,
+    compute_mean_iou,
+    compute_per_class_dice,
+    compute_per_class_iou,
+)
+from ktc_vis.metrics.image_quality import compute_spatial_ssim_map, compute_ssim
+from ktc_vis.metrics.measurement import (
+    compute_current_sensitivity_balance,
+    compute_resistance_consistency,
+    compute_voltage_residual,
+)
 from ktc_vis.metrics.shape_matching import compute_hausdorff, compute_position_error, compute_resolution
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
 _SAMPLE_INDEX = {"a": 1, "b": 2, "c": 3, "d": 4}
+
+
+def _nan_to_zero(value: float) -> float:
+    return 0.0 if np.isnan(value) else float(value)
 
 
 class MetricsEngine:
@@ -57,41 +72,14 @@ class MetricsEngine:
             metrics, _ = load_result(alg, level, sample, self.cache_path)
             return metrics
 
-        gt = self._load_ground_truth(level, sample)
-
-        # ── Reconstruct and time it ───────────────────────────────────────────
         t0 = time.perf_counter()
         reconstruction = self.adapter.reconstruct(measurement)
         runtime = time.perf_counter() - t0
 
-        # ── Image quality ─────────────────────────────────────────────────────
-        ssim = compute_ssim(reconstruction, gt)
-
-        # ── Class metrics ─────────────────────────────────────────────────────
-        iou = compute_per_class_iou(reconstruction, gt)
-        iou_mean = compute_mean_iou(reconstruction, gt)
-        compute_confusion_matrix(reconstruction, gt)
-
-        # ── Shape matching ────────────────────────────────────────────────────
-        hausdorff = compute_hausdorff(reconstruction, gt)
-        position_error = compute_position_error(reconstruction, gt)
-        resolution = compute_resolution(reconstruction, gt)
-
-        metrics = {
-            "ssim": ssim,
-            "iou_water": iou["water"] if not np.isnan(iou["water"]) else 0.0,
-            "iou_resistive": iou["resistive"] if not np.isnan(iou["resistive"]) else 0.0,
-            "iou_conductive": iou["conductive"] if not np.isnan(iou["conductive"]) else 0.0,
-            "iou_mean": iou_mean,
-            "hausdorff": hausdorff,
-            "position_error": position_error,
-            "resolution": resolution,
-            "runtime": runtime,
-        }
-
-        # ── Save to cache ─────────────────────────────────────────────────────
+        metrics = self._compute_metrics_from_reconstruction(
+            measurement, reconstruction, runtime
+        )
         save_result(alg, level, sample, metrics, reconstruction, self.cache_path)
-
         return metrics
 
     def _compute_metrics_from_reconstruction(
@@ -100,30 +88,57 @@ class MetricsEngine:
         reconstruction: np.ndarray,
         runtime: float,
     ) -> dict:
-        """Compute all metrics given a pre-computed reconstruction array.
+        """Compute the full metric battery given a pre-computed reconstruction.
 
         Used by the batch benchmark path where reconstruct_level() already ran
         the algorithm — avoids calling the adapter a second time.
+
+        Covers all 14 README metrics plus per-class Dice and measurement-domain
+        scalars referenced by modules M2 and M4.
         """
         gt = self._load_ground_truth(measurement.level, measurement.sample)
 
+        # Image quality
         ssim = compute_ssim(reconstruction, gt)
+        ssim_map = compute_spatial_ssim_map(reconstruction, gt)
+        ssim_min = float(np.min(ssim_map))
+
+        # Class specific
         iou = compute_per_class_iou(reconstruction, gt)
         iou_mean = compute_mean_iou(reconstruction, gt)
-        compute_confusion_matrix(reconstruction, gt)
+        dice = compute_per_class_dice(reconstruction, gt)
+        dice_mean = compute_mean_dice(reconstruction, gt)
+        cm = compute_confusion_matrix(reconstruction, gt)
+        confusion_accuracy = float(np.mean(np.diag(cm)))
+
+        # Shape matching
         hausdorff = compute_hausdorff(reconstruction, gt)
         position_error = compute_position_error(reconstruction, gt)
         resolution = compute_resolution(reconstruction, gt)
 
+        # Measurement domain
+        voltage_residual = compute_voltage_residual(measurement)
+        resistance_consistency = compute_resistance_consistency(measurement)
+        current_sensitivity = compute_current_sensitivity_balance(measurement)
+
         return {
             "ssim": ssim,
-            "iou_water": iou["water"] if not np.isnan(iou["water"]) else 0.0,
-            "iou_resistive": iou["resistive"] if not np.isnan(iou["resistive"]) else 0.0,
-            "iou_conductive": iou["conductive"] if not np.isnan(iou["conductive"]) else 0.0,
+            "ssim_min": ssim_min,
+            "iou_water": _nan_to_zero(iou["water"]),
+            "iou_resistive": _nan_to_zero(iou["resistive"]),
+            "iou_conductive": _nan_to_zero(iou["conductive"]),
             "iou_mean": iou_mean,
+            "dice_water": _nan_to_zero(dice["water"]),
+            "dice_resistive": _nan_to_zero(dice["resistive"]),
+            "dice_conductive": _nan_to_zero(dice["conductive"]),
+            "dice_mean": dice_mean,
+            "confusion_accuracy": confusion_accuracy,
             "hausdorff": hausdorff,
             "position_error": position_error,
             "resolution": resolution,
+            "voltage_residual": voltage_residual,
+            "resistance_consistency": resistance_consistency,
+            "current_sensitivity": current_sensitivity,
             "runtime": runtime,
         }
 
