@@ -582,42 +582,115 @@ def _voltage_figure(measurement) -> go.Figure:
 
 # ── Metrics scorecard ──────────────────────────────────────────────────────────
 
-_METRIC_KEYS = [
-    ("ssim", "SSIM", True, ".3f"),
-    ("iou_mean", "Mean IoU", True, ".3f"),
-    ("hausdorff", "Hausdorff (px)", False, ".1f"),
+# (metric_key, display_label, higher_is_better, format_spec)
+_METRIC_KEYS: list[tuple[str, str, bool, str]] = [
+    # Image Quality
+    ("ssim",                   "SSIM Score",           True,  ".3f"),
+    ("ssim_min",               "Spatial SSIM (min)",   True,  ".3f"),
+    # Shape Matching
+    ("hausdorff",              "Hausdorff Dist (px)",  False, ".1f"),
+    ("position_error",         "Position Error (px)",  False, ".1f"),
+    ("resolution",             "Resolution (px)",      False, ".1f"),
+    # Class Specific
+    ("confusion_accuracy",     "Confusion Accuracy",   True,  ".3f"),
+    ("iou_mean",               "Mean IoU",             True,  ".3f"),
+    ("iou_water",              "IoU Water",            True,  ".3f"),
+    ("iou_resistive",          "IoU Resistive",        True,  ".3f"),
+    ("iou_conductive",         "IoU Conductive",       True,  ".3f"),
+    ("dice_mean",              "Mean Dice",            True,  ".3f"),
+    ("dice_water",             "Dice Water",           True,  ".3f"),
+    ("dice_resistive",         "Dice Resistive",       True,  ".3f"),
+    ("dice_conductive",        "Dice Conductive",      True,  ".3f"),
+    # Data Efficiency
+    ("runtime",                "Runtime (s)",          False, ".4f"),
+    # Measurement Domain
+    ("voltage_residual",       "Voltage Residual",     False, ".4f"),
+    ("resistance_consistency", "Resistance Consist.",  True,  ".3f"),
+    ("current_sensitivity",    "Current Sensitivity",  True,  ".3f"),
 ]
+
+# Row indices (into _METRIC_KEYS) where a new section header should be rendered.
+_METRIC_SECTIONS: dict[int, str] = {
+    0:  "Image Quality",
+    2:  "Shape Matching",
+    5:  "Class Specific",
+    14: "Data Efficiency",
+    15: "Measurement Domain",
+}
+
+_EXPECTED_METRIC_KEYS: set[str] = {key for key, *_ in _METRIC_KEYS}
 
 
 def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
-    """Return metrics from cache, or compute on-the-fly if reconstruction available."""
-    # 1. Try cache first
-    try:
-        import h5py
-        if _CACHE_PATH.exists():
-            key = f"results/{algorithm}/{level}/{sample}"
-            with h5py.File(str(_CACHE_PATH), "r") as f:
-                if key in f:
-                    grp = f[key]
-                    return {
-                        k: float(grp[k][()])
-                        for k in grp.keys()
-                        if k != "reconstruction"
-                    }
-    except Exception:
-        pass
+    """Return metrics from cache, augmenting any keys missing from older cache entries.
 
-    # 2. Try to compute metrics if reconstruction can be loaded
+    Flow:
+      1. Cache hit → use cached metrics, but if the entry pre-dates a newer
+         metric (Dice, measurement-domain, etc.) recompute the missing scalars
+         from the cached reconstruction and persist them back. The adapter is
+         never re-run.
+      2. Cache miss → fall back to the full MetricsEngine.compute_all path,
+         which will invoke the adapter if necessary.
+    """
+    metrics: dict | None = None
+    reconstruction = None
+
     try:
-        measurement = _LOADER.load(level=level, sample=sample)
-        adapter = _get_adapter(algorithm)
-        from ktc_vis.metrics.engine import MetricsEngine
-        engine = MetricsEngine(adapter, cache_path=_CACHE_PATH)
-        return engine.compute_all(measurement)
-    except Exception as exc:
-        logger.debug("M3 metrics computation failed for %s L%d/%s: %s",
-                     algorithm, level, sample, exc)
-        return None
+        from ktc_vis.cache.hdf5_store import load_result
+        metrics, reconstruction = load_result(
+            algorithm, level, sample, cache_path=_CACHE_PATH
+        )
+    except Exception:
+        metrics = None
+
+    # Full cache miss → compute from scratch
+    if metrics is None:
+        try:
+            measurement = _LOADER.load(level=level, sample=sample)
+            adapter = _get_adapter(algorithm)
+            from ktc_vis.metrics.engine import MetricsEngine
+            engine = MetricsEngine(adapter, cache_path=_CACHE_PATH)
+            return engine.compute_all(measurement)
+        except Exception as exc:
+            logger.debug(
+                "M3 metrics computation failed for %s L%d/%s: %s",
+                algorithm, level, sample, exc,
+            )
+            return None
+
+    # Cache hit → backfill any missing keys without re-running the adapter
+    missing = _EXPECTED_METRIC_KEYS - set(metrics.keys())
+    if missing and reconstruction is not None:
+        try:
+            measurement = _LOADER.load(level=level, sample=sample)
+            from ktc_vis.metrics.engine import MetricsEngine
+            engine = MetricsEngine(_get_adapter(algorithm), cache_path=_CACHE_PATH)
+            recomputed = engine._compute_metrics_from_reconstruction(
+                measurement,
+                reconstruction.astype(np.uint8),
+                runtime=float(metrics.get("runtime", 0.0)),
+            )
+            for key in missing:
+                if key in recomputed:
+                    metrics[key] = recomputed[key]
+            try:
+                from ktc_vis.cache.hdf5_store import save_result
+                save_result(
+                    algorithm, level, sample, metrics, reconstruction,
+                    cache_path=_CACHE_PATH,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "M3 cache write-back failed for %s L%d/%s: %s",
+                    algorithm, level, sample, exc,
+                )
+        except Exception as exc:
+            logger.debug(
+                "M3 metric backfill failed for %s L%d/%s: %s",
+                algorithm, level, sample, exc,
+            )
+
+    return metrics
 
 
 def _scorecard_children(
@@ -651,7 +724,22 @@ def _scorecard_children(
     rows.append(html.Tr(header_cells))
 
     # ── Data rows ─────────────────────────────────────────────────────────────
-    for key, label, higher_better, fmt in _METRIC_KEYS:
+    for idx, (key, label, higher_better, fmt) in enumerate(_METRIC_KEYS):
+        # Section header
+        if idx in _METRIC_SECTIONS:
+            rows.append(html.Tr(html.Td(
+                _METRIC_SECTIONS[idx].upper(),
+                colSpan=len(_ALGORITHMS) + 1,
+                style={
+                    "padding": "10px 10px 4px",
+                    "color": ACCENT,
+                    "fontSize": "9.5px",
+                    "fontWeight": 700,
+                    "letterSpacing": "0.8px",
+                    "borderTop": f"1px solid {BORDER}",
+                },
+            )))
+
         # Collect values
         vals: dict[str, float | None] = {
             alg: (all_metrics[alg].get(key) if all_metrics[alg] else None)
@@ -659,6 +747,11 @@ def _scorecard_children(
         }
         numeric = [v for v in vals.values() if v is not None]
         if not numeric:
+            dash_cell = html.Td("—", style=_td_style(False, False))
+            rows.append(html.Tr(
+                [html.Td(label, style=_td_label_style())] + [dash_cell for _ in _ALGORITHMS],
+                style={"borderBottom": f"1px solid {BORDER}"},
+            ))
             continue
 
         best = max(numeric) if higher_better else min(numeric)
@@ -732,7 +825,7 @@ def _td_style(is_best: bool, is_selected: bool) -> dict:
         "padding": "8px 10px",
         "color": SUCCESS if is_best else TEXT,
         "fontWeight": 700 if is_best else 400,
-        "backgroundColor": "#1e437c" if is_selected else "transparent",
+        "backgroundColor": "#1f2a3a" if is_selected else "transparent",
         "borderRadius": "4px",
     }
 
