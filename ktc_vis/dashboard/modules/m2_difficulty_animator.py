@@ -363,10 +363,10 @@ _RUNTIME_REAL_THRESHOLD_S = 0.01
 # Fixed Y-axis ranges per metric so users can compare across algorithms without
 # the chart auto-rescaling on every algorithm/sample change.
 _FIXED_Y_RANGE: dict[str, tuple[float, float]] = {
-    "ssim":           (0.0, 1.0),
-    "iou_mean":       (0.0, 1.0),
-    "dice":           (0.0, 1.0),
-    "runtime":        (0.0, 60.0),   # seconds; covers ABC1/PNPE2E (~17-27s) + CUQI8 headroom
+    "ssim": (0.0, 1.0),
+    "iou_mean": (0.0, 1.0),
+    "dice": (0.0, 1.0),
+    "runtime": (0.0, 60.0),   # seconds; covers ABC1/PNPE2E (~17-27s) + CUQI8 headroom
 }
 
 

@@ -11,7 +11,6 @@ from dash import Input, Output, dcc, html
 
 from ktc_vis.cache.hdf5_store import CacheMiss, load_result
 from ktc_vis.dashboard.theme import (
-    ACCENT,
     ACCENT_SOFT,
     BORDER,
     CARD,
@@ -35,13 +34,13 @@ _SAMPLES = ["a", "b", "c"]
 _LABEL = {"abc1": "ABC1", "cuqi8": "CUQI8", "pnpe2e": "PNPE2E"}
 _COLOR = {"abc1": "#f4a261", "cuqi8": "#a855f7", "pnpe2e": "#10b981"}
 _SHAPE = {
-    "abc1":   "Wide / low",
-    "cuqi8":  "Narrow / tall",
+    "abc1": "Wide / low",
+    "cuqi8": "Narrow / tall",
     "pnpe2e": "Balanced",
 }
 _EXPECTED = {
-    "abc1":   "Fast, strong at easy levels, less robust across samples.",
-    "cuqi8":  "Slow but strong for hard levels and voltage residual.",
+    "abc1": "Fast, strong at easy levels, less robust across samples.",
+    "cuqi8": "Slow but strong for hard levels and voltage residual.",
     "pnpe2e": "Strong for current sensitivity and voltage residual.",
 }
 
@@ -87,8 +86,8 @@ def layout() -> html.Div:
             _header(),
             html.Div(id=_INFO_ID),
             html.Div(id=_PROFILES_ID, style={"display": "grid",
-                                              "gridTemplateColumns": "repeat(3,1fr)",
-                                              "gap": "14px"}),
+                                             "gridTemplateColumns": "repeat(3,1fr)",
+                                             "gap": "14px"}),
             html.Div(
                 [
                     html.Div(
@@ -196,8 +195,8 @@ def _compute_axes(
         data = raw_data.get(alg, {})
 
         def _ssim(lvs: list[int]) -> float:
-            vals = [data[(l, sample)]["ssim"]
-                    for l in lvs if (l, sample) in data and "ssim" in data[(l, sample)]]
+            vals = [data[(lv, sample)]["ssim"]
+                    for lv in lvs if (lv, sample) in data and "ssim" in data[(lv, sample)]]
             return _mean(vals)
 
         point = data.get((level, sample), {})
@@ -215,15 +214,15 @@ def _compute_axes(
         )
 
         raw[alg] = {
-            "Total SSIM":       _ssim(list(range(1, 8))),
-            "Easy SSIM":        _ssim([1, 2, 3]),
-            "Hard SSIM":        _ssim([5, 6, 7]),
-            "IoU Conductive":   point.get("iou_conductive",  float("nan")),
-            "IoU Resistive":    point.get("iou_resistive",   float("nan")),
-            "Speed":            point.get("runtime",         float("nan")),
-            "Robustness":       robustness_std,
-            "Voltage Residual": point.get("voltage_residual",    float("nan")),
-            "Curr. Sensitivity":point.get("current_sensitivity", float("nan")),
+            "Total SSIM": _ssim(list(range(1, 8))),
+            "Easy SSIM": _ssim([1, 2, 3]),
+            "Hard SSIM": _ssim([5, 6, 7]),
+            "IoU Conductive": point.get("iou_conductive", float("nan")),
+            "IoU Resistive": point.get("iou_resistive", float("nan")),
+            "Speed": point.get("runtime", float("nan")),
+            "Robustness": robustness_std,
+            "Voltage Residual": point.get("voltage_residual", float("nan")),
+            "Curr. Sensitivity": point.get("current_sensitivity", float("nan")),
         }
 
     # Min-max normalise per axis; apply inversion for "lower=better" axes
@@ -439,10 +438,10 @@ def _mini_bar(label: str, score: float, color: str) -> html.Div:
             html.Div(
                 [
                     html.Span(label, style={"color": MUTED, "fontSize": "10.5px",
-                                             "minWidth": "112px", "display": "inline-block"}),
+                                            "minWidth": "112px", "display": "inline-block"}),
                     html.Span(f"{score:.2f}", style={"color": TEXT, "fontSize": "11px",
-                                                      "fontWeight": 600,
-                                                      "fontVariantNumeric": "tabular-nums"}),
+                                                     "fontWeight": 600,
+                                                     "fontVariantNumeric": "tabular-nums"}),
                 ],
                 style={"display": "flex", "justifyContent": "space-between",
                        "marginBottom": "3px"},
@@ -531,7 +530,7 @@ def _build_heatmap(
                     html.Div(axis, style={"color": TEXT, "fontSize": "12px",
                                           "fontWeight": 500}),
                     html.Div(hint, style={"color": MUTED, "fontSize": "10px",
-                                           "lineHeight": "1.4", "marginTop": "2px"}),
+                                          "lineHeight": "1.4", "marginTop": "2px"}),
                     html.Div("(inverted)" if is_inverted else "",
                              style={"color": ACCENT_SOFT, "fontSize": "9.5px",
                                     "marginTop": "2px"}),
@@ -648,7 +647,6 @@ def _header() -> html.Div:
     )
 
 
-
 def _panel_label(title: str, subtitle: str) -> html.Div:
     return html.Div(
         [
@@ -724,9 +722,9 @@ def _static_legend() -> html.Div:
 
 def _banner(message: str, kind: str = "info") -> html.Div:
     palette = {
-        "info":  ("#1f3a5f", "#5b8def", "#cfe0ff"),
-        "warn":  ("#3a2a1a", WARN,      "#f4c870"),
-        "error": ("#3a1f25", DANGER,    "#ffd1d8"),
+        "info": ("#1f3a5f", "#5b8def", "#cfe0ff"),
+        "warn": ("#3a2a1a", WARN, "#f4c870"),
+        "error": ("#3a1f25", DANGER, "#ffd1d8"),
     }
     bg, border, fg = palette.get(kind, palette["info"])
     return html.Div(message, style={
