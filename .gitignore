@@ -1,5 +1,7 @@
 # KTC-Vis .gitignore
 
+DEPLOYMENT.md
+
 # ─────────────────────────────────────────────
 # DATA — Never commit raw data or large caches
 # ─────────────────────────────────────────────
