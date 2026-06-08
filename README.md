@@ -11,12 +11,12 @@ KTC-Vis integrates three open-source EIT reconstruction algorithms from KTC2023 
 
 ## Team Members
 
-| Name | Student ID | Role |
-|------|------------|------|
-| Muhammad Muzammal | 1541353 | EIT & Data Specialist / Backend Engineer |
-| Smit Savani | 1420825 | Metrics & Backend Engineer |
-| Asmita Bhuva | 1541650 | Viz & Frontend Developer |
-| Shimul Paul | 1441927 | Integration & DevOps Lead |
+| Name | Student ID | Role | Modules |
+|------|------------|------|---------|
+| Muhammad Muzammal | 1541353 | EIT & Data Specialist / Backend Engineer | M1, M5 |
+| Smit Savani | 1420825 | Metrics & Backend Engineer | M3, M6 |
+| Asmita Bhuva | 1541650 | Viz & Frontend Developer | M4, M5 |
+| Shimul Paul | 1441927 | Integration & DevOps Lead | M2, M6 |
 
 ---
 
@@ -71,6 +71,8 @@ There is no open tool that loads all KTC2023 algorithms, runs them on the same d
 ## Dashboard: 6 Modules
 
 ### Module 1 — Reconstruction Explorer
+> **Owner: Muhammad Muzammal**
+
 Inspect any (algorithm, level, sample) combination across 4 side-by-side panels:
 - Ground Truth Segmentation
 - Reconstructed Conductivity / Heatmap
@@ -78,12 +80,18 @@ Inspect any (algorithm, level, sample) combination across 4 side-by-side panels:
 - Error Overlay
 
 ### Module 2 — Difficulty Animator
+> **Owner: Shimul Paul**
+
 Level 1–7 slider animates how each algorithm degrades. Shows degradation curves for SSIM, IoU, Dice, Hausdorff distance, and runtime.
 
 ### Module 3 — Side-by-Side Comparison Grid
+> **Owner: Smit Savani**
+
 Three-column grid showing all algorithms at the same level/sample simultaneously. Includes pairwise difference images and voltage residual chart.
 
 ### Module 4 — Fingerprint Radar
+> **Owner: Asmita Bhuva**
+
 9-axis radar chart comparing algorithm performance profiles:
 
 | Axis | Domain |
@@ -101,6 +109,8 @@ Three-column grid showing all algorithms at the same level/sample simultaneously
 Expected shapes: CUQI8 → narrow/tall; ABC1 → wide/low; PNPE2E → balanced/intermediate.
 
 ### Module 5 — Failure Autopsy
+> **Owners: Muhammad Muzammal & Asmita Bhuva**
+
 Ranked worst-case list by SSIM. Click any case to open 4 diagnostic panels:
 - Spatial SSIM heatmap
 - 3×3 material confusion matrix
@@ -118,6 +128,8 @@ Ranked worst-case list by SSIM. Click any case to open 4 diagnostic panels:
 | E | Mask suppression | PNPE2E | Recall near zero |
 
 ### Module 6 — Measurement Domain Viewer
+> **Owners: Smit Savani & Shimul Paul**
+
 Explore raw electrical measurements independent of reconstruction:
 - **Current panel:** Polar plot of injected current patterns (electrodes 1–32, magnitude = bar height).
 - **Voltage panel:** Polar measured voltages + difference plot (inclusion vs. empty tank).
