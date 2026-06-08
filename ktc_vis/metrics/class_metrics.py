@@ -41,6 +41,28 @@ def compute_mean_iou(pred: np.ndarray, gt: np.ndarray) -> float:
     return float(np.mean(valid)) if valid else 0.0
 
 
+def compute_per_class_dice(pred: np.ndarray, gt: np.ndarray) -> dict[str, float]:
+    """Compute per-class Dice coefficient (F1 for segmentation).
+
+    Dice = 2*TP / (2*TP + FP + FN) per class.
+    """
+    result = {}
+    for cls_id, cls_name in CLASSES.items():
+        p = pred == cls_id
+        g = gt == cls_id
+        tp = np.logical_and(p, g).sum()
+        denom = p.sum() + g.sum()
+        result[cls_name] = float(2 * tp / denom) if denom > 0 else float("nan")
+    return result
+
+
+def compute_mean_dice(pred: np.ndarray, gt: np.ndarray) -> float:
+    """Compute mean Dice across classes present in both pred and gt."""
+    per_class = compute_per_class_dice(pred, gt)
+    valid = [v for v in per_class.values() if not np.isnan(v)]
+    return float(np.mean(valid)) if valid else 0.0
+
+
 def compute_confusion_matrix(pred: np.ndarray, gt: np.ndarray) -> np.ndarray:
     """Compute 3×3 normalized confusion matrix (rows = GT, cols = pred).
 
