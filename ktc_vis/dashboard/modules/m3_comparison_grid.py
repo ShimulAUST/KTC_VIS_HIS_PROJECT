@@ -732,7 +732,7 @@ def _td_style(is_best: bool, is_selected: bool) -> dict:
         "padding": "8px 10px",
         "color": SUCCESS if is_best else TEXT,
         "fontWeight": 700 if is_best else 400,
-        "backgroundColor": "#1f2a3a" if is_selected else "transparent",
+        "backgroundColor": "#1e437c" if is_selected else "transparent",
         "borderRadius": "4px",
     }
 
