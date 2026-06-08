@@ -9,7 +9,8 @@ import scipy.io
 from ktc_vis.adapters.base import AlgorithmAdapter, KTCMeasurement
 from ktc_vis.cache.hdf5_store import is_cached, load_result, save_result
 from ktc_vis.metrics.class_metrics import compute_confusion_matrix, compute_mean_iou, compute_per_class_iou
-from ktc_vis.metrics.image_quality import compute_ssim
+from ktc_vis.metrics.image_quality import compute_ssim_stats
+from ktc_vis.metrics.measurement import compute_resistance_consistency, compute_voltage_residual
 from ktc_vis.metrics.shape_matching import compute_hausdorff, compute_position_error, compute_resolution
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -65,27 +66,36 @@ class MetricsEngine:
         runtime = time.perf_counter() - t0
 
         # ── Image quality ─────────────────────────────────────────────────────
-        ssim = compute_ssim(reconstruction, gt)
+        ssim, ssim_min = compute_ssim_stats(reconstruction, gt)
 
         # ── Class metrics ─────────────────────────────────────────────────────
         iou = compute_per_class_iou(reconstruction, gt)
         iou_mean = compute_mean_iou(reconstruction, gt)
-        compute_confusion_matrix(reconstruction, gt)
+        cm = compute_confusion_matrix(reconstruction, gt)
+        confusion_accuracy = float(np.mean(np.diag(cm)))
 
         # ── Shape matching ────────────────────────────────────────────────────
         hausdorff = compute_hausdorff(reconstruction, gt)
         position_error = compute_position_error(reconstruction, gt)
         resolution = compute_resolution(reconstruction, gt)
 
+        # ── Measurement domain ────────────────────────────────────────────────
+        voltage_residual = compute_voltage_residual(measurement)
+        resistance_consistency = compute_resistance_consistency(measurement)
+
         metrics = {
             "ssim": ssim,
+            "ssim_min": ssim_min,
             "iou_water": iou["water"] if not np.isnan(iou["water"]) else 0.0,
             "iou_resistive": iou["resistive"] if not np.isnan(iou["resistive"]) else 0.0,
             "iou_conductive": iou["conductive"] if not np.isnan(iou["conductive"]) else 0.0,
             "iou_mean": iou_mean,
+            "confusion_accuracy": confusion_accuracy,
             "hausdorff": hausdorff,
             "position_error": position_error,
             "resolution": resolution,
+            "voltage_residual": voltage_residual,
+            "resistance_consistency": resistance_consistency,
             "runtime": runtime,
         }
 
@@ -107,23 +117,30 @@ class MetricsEngine:
         """
         gt = self._load_ground_truth(measurement.level, measurement.sample)
 
-        ssim = compute_ssim(reconstruction, gt)
+        ssim, ssim_min = compute_ssim_stats(reconstruction, gt)
         iou = compute_per_class_iou(reconstruction, gt)
         iou_mean = compute_mean_iou(reconstruction, gt)
-        compute_confusion_matrix(reconstruction, gt)
+        cm = compute_confusion_matrix(reconstruction, gt)
+        confusion_accuracy = float(np.mean(np.diag(cm)))
         hausdorff = compute_hausdorff(reconstruction, gt)
         position_error = compute_position_error(reconstruction, gt)
         resolution = compute_resolution(reconstruction, gt)
+        voltage_residual = compute_voltage_residual(measurement)
+        resistance_consistency = compute_resistance_consistency(measurement)
 
         return {
             "ssim": ssim,
+            "ssim_min": ssim_min,
             "iou_water": iou["water"] if not np.isnan(iou["water"]) else 0.0,
             "iou_resistive": iou["resistive"] if not np.isnan(iou["resistive"]) else 0.0,
             "iou_conductive": iou["conductive"] if not np.isnan(iou["conductive"]) else 0.0,
             "iou_mean": iou_mean,
+            "confusion_accuracy": confusion_accuracy,
             "hausdorff": hausdorff,
             "position_error": position_error,
             "resolution": resolution,
+            "voltage_residual": voltage_residual,
+            "resistance_consistency": resistance_consistency,
             "runtime": runtime,
         }
 

@@ -645,22 +645,41 @@ def _voltage_figure(measurement) -> go.Figure:
 
 
 # ── Metrics scorecard ──────────────────────────────────────────────────────────
+#
+# All 11 metrics from the README metrics table, organised by category.
+# Tuple: (cache_key, display_label, higher_better, fmt, kind)
+#   kind = "scalar"  → numeric value from HDF5 cache, shows ★ for best
+#   kind = "pending" → not yet implemented in metrics engine  — shows "—"
 
 _METRIC_KEYS = [
-    # Image quality
-    ("ssim",            "SSIM",              True,  ".3f"),
-    # Class-specific IoU
-    ("iou_mean",        "Mean IoU",          True,  ".3f"),
-    ("iou_water",       "IoU Water",         True,  ".3f"),
-    ("iou_resistive",   "IoU Resistive",     True,  ".3f"),
-    ("iou_conductive",  "IoU Conductive",    True,  ".3f"),
-    # Shape matching
-    ("hausdorff",       "Hausdorff (px)",    False, ".1f"),
-    ("position_error",  "Position Err (px)", False, ".1f"),
-    ("resolution",      "Resolution (px)",   False, ".1f"),
-    # Data efficiency
-    ("runtime",         "Runtime (s)",       False, ".2f"),
+    # ── Image Quality ──────────────────────────────────────────────────────────
+    ("ssim",                    "SSIM Score",            True,  ".3f", "scalar"),
+    ("ssim_min",                "Spatial SSIM (min)",    True,  ".3f", "scalar"),
+    # ── Shape Matching ─────────────────────────────────────────────────────────
+    ("hausdorff",               "Hausdorff Dist (px)",   False, ".1f", "scalar"),
+    ("position_error",          "Position Error (px)",   False, ".1f", "scalar"),
+    ("resolution",              "Resolution (px)",       False, ".1f", "scalar"),
+    # ── Class Specific ─────────────────────────────────────────────────────────
+    ("confusion_accuracy",       "Confusion Accuracy",    True,  ".3f", "scalar"),
+    ("iou_mean",                "Mean IoU",              True,  ".3f", "scalar"),
+    ("iou_water",               "IoU Water",             True,  ".3f", "scalar"),
+    ("iou_resistive",           "IoU Resistive",         True,  ".3f", "scalar"),
+    ("iou_conductive",          "IoU Conductive",        True,  ".3f", "scalar"),
+    # ── Data Efficiency ────────────────────────────────────────────────────────
+    ("runtime",                 "Runtime (s)",           False, ".4f", "scalar"),
+    # ── Measurement Domain ─────────────────────────────────────────────────────
+    ("voltage_residual",        "Voltage Residual",      False, ".4f", "scalar"),
+    ("resistance_consistency",  "Resistance Consist.",   True,  ".3f", "scalar"),
 ]
+
+# First metric index for each category (used to insert section-header rows)
+_METRIC_SECTIONS: dict[int, str] = {
+    0:  "Image Quality",
+    2:  "Shape Matching",
+    5:  "Class Specific",
+    10: "Data Efficiency",
+    11: "Measurement Domain",
+}
 
 
 def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
@@ -725,14 +744,47 @@ def _scorecard_children(
     rows.append(html.Tr(header_cells))
 
     # ── Data rows ─────────────────────────────────────────────────────────────
-    for key, label, higher_better, fmt in _METRIC_KEYS:
-        # Collect values; treat runtime=0.0 as missing (old cache used 0.0 as sentinel)
+    for idx, (key, label, higher_better, fmt, kind) in enumerate(_METRIC_KEYS):
+
+        # Insert category section header when a new group starts
+        if idx in _METRIC_SECTIONS:
+            rows.append(
+                html.Tr(
+                    html.Td(
+                        _METRIC_SECTIONS[idx].upper(),
+                        colSpan=len(_ALGORITHMS) + 1,
+                        style={
+                            "padding": "10px 10px 4px",
+                            "color": ACCENT,
+                            "fontSize": "9.5px",
+                            "fontWeight": 700,
+                            "letterSpacing": "0.8px",
+                            "borderTop": f"1px solid {BORDER}",
+                        },
+                    )
+                )
+            )
+
+        # ── pending metric — not yet implemented in the metrics engine ─────────
+        if kind == "pending":
+            cells = [html.Td(label, style=_td_label_style())]
+            for _ in _ALGORITHMS:
+                cells.append(html.Td("—", style={**_td_style(False, False), "color": MUTED}))
+            rows.append(html.Tr(cells, style={"borderBottom": f"1px solid {BORDER}"}))
+            continue
+
+        # ── scalar metric — numeric value from HDF5 cache ─────────────────────
         vals: dict[str, float | None] = {}
         for alg in _ALGORITHMS:
-            v = all_metrics[alg].get(key) if all_metrics[alg] else None
-            vals[alg] = None if (key == "runtime" and v == 0.0) else v
+            vals[alg] = all_metrics[alg].get(key) if all_metrics[alg] else None
         numeric = [v for v in vals.values() if v is not None]
+        # When ALL values are missing show the row with "—" so the metric name
+        # is still visible (e.g. voltage_residual not yet in old cache entries)
         if not numeric:
+            cells = [html.Td(label, style=_td_label_style())]
+            for _ in _ALGORITHMS:
+                cells.append(html.Td("—", style={**_td_style(False, False), "color": MUTED}))
+            rows.append(html.Tr(cells, style={"borderBottom": f"1px solid {BORDER}"}))
             continue
 
         best = max(numeric) if higher_better else min(numeric)
@@ -774,7 +826,7 @@ def _scorecard_children(
             },
         ),
         html.P(
-            f"★ = best for that metric · highlighted column = sidebar selection ({selected_alg.upper()})",
+            f"★ = best · highlighted = sidebar selection ({selected_alg.upper()}) · — = not yet implemented",
             style={"color": MUTED, "fontSize": "10px", "marginTop": "10px"},
         ),
     ]

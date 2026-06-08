@@ -970,14 +970,15 @@ def _quick_metrics_placeholder(msg: str = "—") -> html.Div:
 
 
 def _quick_metrics_view(metrics: dict) -> html.Div:
-    """3×2 grid of the most actionable cached numbers."""
+    """3×N grid of the most actionable cached numbers."""
     items = [
-        ("IoU water",       metrics.get("iou_water"),       "{:.2f}",  None),
-        ("IoU resistive",   metrics.get("iou_resistive"),   "{:.2f}",  None),
-        ("IoU conductive",  metrics.get("iou_conductive"),  "{:.2f}",  None),
-        ("Hausdorff",       metrics.get("hausdorff"),       "{:.1f} px", "lower better"),
-        ("Position error",  metrics.get("position_error"),  "{:.1f} px", "lower better"),
-        ("Runtime",         metrics.get("runtime"),         "{:.2f} s",  "lower better"),
+        ("IoU water",             metrics.get("iou_water"),       "{:.2f}",  None),
+        ("IoU resistive",         metrics.get("iou_resistive"),   "{:.2f}",  None),
+        ("IoU conductive",        metrics.get("iou_conductive"),  "{:.2f}",  None),
+        ("Hausdorff",             metrics.get("hausdorff"),       "{:.1f} px", "lower better"),
+        ("Position error",        metrics.get("position_error"),  "{:.1f} px", "lower better"),
+        ("Runtime",               metrics.get("runtime"),         "{:.2f} s",  "lower better"),
+        ("Spatial SSIM (min)",    metrics.get("ssim_min"),        "{:.3f}",  None),
     ]
 
     def _fmt(value, tmpl):
