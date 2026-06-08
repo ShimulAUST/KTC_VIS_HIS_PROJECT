@@ -39,7 +39,7 @@ from ktc_vis.utils.figures import (
 
 logger = logging.getLogger(__name__)
 
-# ── Project paths ──────────────────────────────────────────────────────────────
+# ── Project paths   found yt6h ehgvbeidw  ──────────────────────────────────────────────────────────────
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
 _CACHE_PATH = _PROJECT_ROOT / "data" / "cache" / "results.h5"
@@ -48,9 +48,9 @@ _SAMPLE_MAP = {"a": 1, "b": 2, "c": 3, "d": 4}
 # ── Algorithm registry ─────────────────────────────────────────────────────────
 _ALGORITHMS: list[str] = ["abc1", "cuqi8", "pnpe2e"]
 _ALG_COLORS: dict[str, str] = {
-    "abc1": "#5b8def",   # blue
-    "cuqi8": "#e85d75",   # pink
-    "pnpe2e": "#f4c870",   # gold
+    "abc1": "#acef5b",   # blue
+    "cuqi8": "#c9b8bb",   # pink
+    "pnpe2e": "#332e25",   # gold
 }
 
 # ── Singletons ─────────────────────────────────────────────────────────────────
