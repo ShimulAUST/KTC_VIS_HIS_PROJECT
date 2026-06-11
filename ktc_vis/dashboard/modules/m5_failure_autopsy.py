@@ -521,10 +521,10 @@ def _diagnostic_grid() -> html.Div:
         _graph_panel("Confusion Matrix", "rows = ground truth · cols = prediction",
                      _CONFUSION_ID, badge="CM", badge_color="#a07bff"),
         _graph_panel("Boundary Error (polar)",
-                     "angular distribution of mis-classified pixels",
+                     "errors by angle · green = active electrode · gray × = removed",
                      _BOUNDARY_ID, badge="∂", badge_color=DANGER),
         _graph_panel("Measurement Perturbation (polar)",
-                     "per-injection inclusion vs. empty-tank energy",
+                     "blue = strong signal · red = weakest 25% · yellow dashed = threshold",
                      _MEAS_ID, badge="V", badge_color=SUCCESS),
     ]
     return html.Div(
@@ -1344,9 +1344,17 @@ def _boundary_radial_figure(
     counts, _ = np.histogram(angles_deg, bins=bin_edges)
     centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
 
-    # Active electrode angles for the selected level
-    active = subsample_electrodes(level)
-    el_angles = [(360.0 * idx / 32.0) % 360 for idx in active]
+    # Electrode geometry: 32 positions equally spaced around the rim.
+    # The current level keeps `active` (drawn green); the rest are removed
+    # (drawn dim gray so the user can see the measurement gaps).
+    active = set(subsample_electrodes(level))
+    all_angles = [(360.0 * idx / 32.0) % 360 for idx in range(32)]
+    active_angles  = [a for i, a in enumerate(all_angles) if i in active]
+    removed_angles = [a for i, a in enumerate(all_angles) if i not in active]
+
+    rmax = float(counts.max()) if counts.max() > 0 else 1.0
+    r_rim = rmax * 1.18                       # ring sits clearly outside the bars
+    r_axis_max = rmax * 1.30                   # leave headroom so dots aren't clipped
 
     fig = go.Figure()
     fig.add_trace(go.Barpolar(
@@ -1362,14 +1370,27 @@ def _boundary_radial_figure(
         name="Error count",
     ))
 
-    rmax = float(counts.max()) if counts.max() > 0 else 1.0
+    # Removed electrodes (faint gray X marks)
+    if removed_angles:
+        fig.add_trace(go.Scatterpolar(
+            r=[r_rim] * len(removed_angles),
+            theta=removed_angles,
+            mode="markers",
+            marker=dict(size=10, color="rgba(154,160,180,0.55)",
+                        symbol="x-thin",
+                        line=dict(color="#9aa0b4", width=1.4)),
+            name="Removed electrode",
+            hovertemplate="removed @ %{theta:.0f}°<extra></extra>",
+        ))
+
+    # Active electrodes (bright green dots)
     fig.add_trace(go.Scatterpolar(
-        r=[rmax * 1.08] * len(el_angles),
-        theta=el_angles,
+        r=[r_rim] * len(active_angles),
+        theta=active_angles,
         mode="markers",
-        marker=dict(size=7, color=SUCCESS, symbol="circle",
-                    line=dict(color="#000", width=0.4)),
-        name="Active electrode",
+        marker=dict(size=11, color=SUCCESS, symbol="circle",
+                    line=dict(color="#0a0a18", width=1.0)),
+        name=f"Active electrode ({len(active_angles)})",
         hovertemplate="electrode @ %{theta:.0f}°<extra></extra>",
     ))
 
@@ -1379,7 +1400,8 @@ def _boundary_radial_figure(
             bgcolor="#14142a",
             radialaxis=dict(tickfont=dict(color=MUTED, size=9),
                             gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                            angle=90, tickangle=90),
+                            angle=90, tickangle=90,
+                            range=[0, r_axis_max]),
             angularaxis=dict(tickfont=dict(color=TEXT, size=10),
                              gridcolor="#2a2a4a", linecolor="#2a2a4a",
                              direction="counterclockwise", rotation=0),
@@ -1425,9 +1447,17 @@ def _measurement_residual_figure(
 
     n = len(per_inj)
     angles = np.linspace(0.0, 360.0, n, endpoint=False)
-    threshold = float(np.median(per_inj) * 0.4) if n else 0.0
 
-    colors = ["#e85d75" if v < threshold else "#5b8def" for v in per_inj]
+    # Weak-signal threshold = 25th percentile of per-injection perturbation.
+    # This is robust across levels: at L1 ref subtraction is exact; at L2-L7
+    # the cached ref.mat is sliced to match the subsampled shape (approximate),
+    # so a percentile cutoff stays meaningful even when raw magnitudes shift.
+    if n:
+        threshold = float(np.percentile(per_inj, 25))
+    else:
+        threshold = 0.0
+
+    colors = ["#e85d75" if v <= threshold else "#5b8def" for v in per_inj]
 
     fig = go.Figure()
     fig.add_trace(go.Barpolar(
@@ -1435,19 +1465,20 @@ def _measurement_residual_figure(
         theta=angles,
         width=[360 / max(n, 1)] * n,
         marker=dict(color=colors, line=dict(color="#1e1e2f", width=0.4)),
-        hovertemplate="injection %{theta:.0f}°<br>||ΔV||=%{r:.4f}<extra></extra>",
+        hovertemplate=("injection %{theta:.0f}°<br>"
+                       "‖ΔV‖=%{r:.4f}<extra></extra>"),
         name="‖V − V_ref‖",
     ))
-    # Threshold ring
+    # Threshold ring — drawn AFTER the bars so it sits on top of them.
     if threshold > 0 and n:
-        ring_theta = np.linspace(0, 360, 120)
+        ring_theta = np.linspace(0, 360, 180)
         fig.add_trace(go.Scatterpolar(
             r=[threshold] * len(ring_theta),
             theta=ring_theta,
             mode="lines",
-            line=dict(color=WARN, width=1.2, dash="dash"),
+            line=dict(color=WARN, width=2.0, dash="dash"),
             hoverinfo="skip",
-            name="weak-signal threshold",
+            name=f"weak-signal threshold (P25 = {threshold:.3f})",
         ))
 
     fig.update_layout(
