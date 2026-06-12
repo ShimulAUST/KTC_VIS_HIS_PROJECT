@@ -1,53 +1,91 @@
-"""Measurement-domain metrics. Owner: Smit Savani."""
+"""Measurement-domain metrics. Owner: Smit Savani.
+
+Scalar summaries derived purely from a `KTCMeasurement` (currents, voltages,
+resistance) — no forward-model evaluation required, so these can be computed
+even for algorithms that don't expose predicted voltages.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 
+from ktc_vis.adapters.base import KTCMeasurement
 
-def compute_voltage_residual(measurement) -> float:  # noqa: ANN001
-    """Mean per-injection RMS voltage deviation from the cross-injection baseline.
+_EPS = 1e-12
 
-    Subtracts the mean voltage pattern across all injections (proxy for the
-    empty-tank response) from each injection row, then computes the RMS of the
-    residual and averages across injections.
 
-    A large value means the inclusion strongly perturbs the voltage field.
+def compute_voltage_residual(measurement: KTCMeasurement) -> float:
+    """RMS deviation of measured voltages from a per-injection mean baseline.
+
+    Each row of the voltage matrix is one injection pattern. Subtracting the
+    row mean removes the DC offset; the remaining RMS, normalised by the RMS
+    of the original signal, gives a dimensionless residual in [0, 1].
+
+    Higher values indicate stronger spatial structure (a richer measurement
+    that distinguishes inclusions from background); lower values indicate a
+    nearly uniform response.
 
     Args:
-        measurement: KTCMeasurement with a populated voltage_matrix
-                     of shape (n_injections, n_channels).
+        measurement: Loaded KTC2023 measurement.
 
     Returns:
-        Mean RMS residual (float). Lower = weaker inclusion signal.
+        Scalar residual in [0, 1]. Returns 0.0 if the voltage matrix is empty.
     """
     V = np.asarray(measurement.voltage_matrix, dtype=np.float64)
-    baseline = V.mean(axis=0, keepdims=True)      # average over all injections
-    delta = V - baseline
-    per_inj_rms = np.sqrt(np.mean(delta ** 2, axis=1))
-    return float(per_inj_rms.mean())
+    if V.size == 0:
+        return 0.0
+    baseline = V.mean(axis=1, keepdims=True)
+    residual = V - baseline
+    num = float(np.sqrt(np.mean(residual ** 2)))
+    denom = float(np.sqrt(np.mean(V ** 2))) + _EPS
+    return float(num / denom)
 
 
-def compute_resistance_consistency(measurement) -> float:  # noqa: ANN001
-    """Consistency of the R = V/I resistance map, in [0, 1].
+def compute_resistance_consistency(measurement: KTCMeasurement) -> float:
+    """Homogeneity score of the R = V / I matrix in [0, 1].
 
-    Computes the coefficient of variation (std / |mean|) of the full
-    resistance matrix and maps it to a [0, 1] score via 1 / (1 + CV).
-
-    A value near 1 means the resistance field is spatially uniform (consistent
-    with a simple homogeneous background). A value near 0 means high spatial
-    variability — strong inclusion perturbation or noisy measurements.
+    For a homogeneous tank the resistance values are nearly constant, so the
+    coefficient of variation ``std(R) / |mean(R)|`` is small. We return
+    ``1 - clip(CoV, 0, 1)`` so that higher = more consistent / more homogeneous.
 
     Args:
-        measurement: KTCMeasurement with a populated resistance_matrix
-                     of shape (n_injections, n_measurements).
+        measurement: Loaded KTC2023 measurement.
 
     Returns:
-        Consistency score in [0, 1]. Higher = more consistent.
+        Consistency score in [0, 1]. Higher is better.
     """
     R = np.asarray(measurement.resistance_matrix, dtype=np.float64)
-    mean_abs = float(np.abs(R).mean())
-    if mean_abs < 1e-10:
+    R = R[np.isfinite(R)]
+    if R.size == 0:
         return 0.0
-    cv = float(np.std(R) / mean_abs)
-    return float(1.0 / (1.0 + cv))
+    mean = float(np.mean(R))
+    if abs(mean) < _EPS:
+        return 0.0
+    cov = float(np.std(R) / abs(mean))
+    return float(1.0 - min(max(cov, 0.0), 1.0))
+
+
+def compute_current_sensitivity_balance(measurement: KTCMeasurement) -> float:
+    """Balance of injected current magnitude across electrodes, in [0, 1].
+
+    For each electrode, sum the absolute current contribution across all
+    injection patterns. A perfectly balanced protocol drives every electrode
+    with equal total current. We measure deviation from that ideal as the
+    coefficient of variation of the per-electrode totals and return
+    ``1 - clip(CoV, 0, 1)`` so higher = more balanced.
+
+    Args:
+        measurement: Loaded KTC2023 measurement.
+
+    Returns:
+        Balance score in [0, 1]. Higher means more uniform electrode usage.
+    """
+    I = np.asarray(measurement.current_matrix, dtype=np.float64)
+    if I.size == 0:
+        return 0.0
+    per_electrode = np.abs(I).sum(axis=0)
+    mean = float(per_electrode.mean())
+    if mean < _EPS:
+        return 0.0
+    cov = float(per_electrode.std() / mean)
+    return float(1.0 - min(max(cov, 0.0), 1.0))

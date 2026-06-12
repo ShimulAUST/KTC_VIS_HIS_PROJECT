@@ -101,21 +101,21 @@ _FAILURE_TYPES = {
 }
 
 # ── Component IDs ────────────────────────────────────────────────────────────
-_RANKING_ID       = "m5-ranking"
-_DETAIL_CHIPS_ID  = "m5-detail-chips"
-_BADGE_ID         = "m5-failure-badge"
-_EXPLAIN_ID       = "m5-failure-explanation"
-_THUMBS_ID        = "m5-thumbs"
+_RANKING_ID = "m5-ranking"
+_DETAIL_CHIPS_ID = "m5-detail-chips"
+_BADGE_ID = "m5-failure-badge"
+_EXPLAIN_ID = "m5-failure-explanation"
+_THUMBS_ID = "m5-thumbs"
 _QUICK_METRICS_ID = "m5-quick-metrics"
-_SIGNALS_ID       = "m5-signal-breakdown"
-_SPATIAL_SSIM_ID  = "m5-spatial-ssim"
-_CONFUSION_ID     = "m5-confusion"
-_BOUNDARY_ID      = "m5-boundary"
-_MEAS_ID          = "m5-measurement-residual"
-_FILTER_ID        = "m5-alg-filter"
-_COUNT_ID         = "m5-count-slider"
-_BANNER_ID        = "m5-banner"
-_DATA_STORE_ID    = "m5-ranking-store"
+_SIGNALS_ID = "m5-signal-breakdown"
+_SPATIAL_SSIM_ID = "m5-spatial-ssim"
+_CONFUSION_ID = "m5-confusion"
+_BOUNDARY_ID = "m5-boundary"
+_MEAS_ID = "m5-measurement-residual"
+_FILTER_ID = "m5-alg-filter"
+_COUNT_ID = "m5-count-slider"
+_BANNER_ID = "m5-banner"
+_DATA_STORE_ID = "m5-ranking-store"
 
 # Pattern-matching row IDs: {"type": "m5-row", "key": "alg|level|sample"}.
 _ROW_TYPE = "m5-row"
@@ -184,8 +184,8 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     # ── Row click → snap the shared sidebar to that case ─────────────────────
     @app.callback(
         Output("sidebar-algorithm-dropdown", "value", allow_duplicate=True),
-        Output("sidebar-level-slider",       "value", allow_duplicate=True),
-        Output("sidebar-sample-radio",       "value", allow_duplicate=True),
+        Output("sidebar-level-slider", "value", allow_duplicate=True),
+        Output("sidebar-sample-radio", "value", allow_duplicate=True),
         Input({"type": _ROW_TYPE, "key": ALL}, "n_clicks"),
         State({"type": _ROW_TYPE, "key": ALL}, "id"),
         prevent_initial_call=True,
@@ -201,19 +201,19 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
     # ── Sidebar selection → refresh the 4 diagnostic panels ──────────────────
     @app.callback(
-        Output(_DETAIL_CHIPS_ID,  "children"),
-        Output(_BADGE_ID,         "children"),
-        Output(_EXPLAIN_ID,       "children"),
-        Output(_THUMBS_ID,        "children"),
+        Output(_DETAIL_CHIPS_ID, "children"),
+        Output(_BADGE_ID, "children"),
+        Output(_EXPLAIN_ID, "children"),
+        Output(_THUMBS_ID, "children"),
         Output(_QUICK_METRICS_ID, "children"),
-        Output(_SIGNALS_ID,       "children"),
-        Output(_SPATIAL_SSIM_ID,  "figure"),
-        Output(_CONFUSION_ID,     "figure"),
-        Output(_BOUNDARY_ID,      "figure"),
-        Output(_MEAS_ID,          "figure"),
+        Output(_SIGNALS_ID, "children"),
+        Output(_SPATIAL_SSIM_ID, "figure"),
+        Output(_CONFUSION_ID, "figure"),
+        Output(_BOUNDARY_ID, "figure"),
+        Output(_MEAS_ID, "figure"),
         Input("sidebar-algorithm-dropdown", "value"),
-        Input("sidebar-level-slider",       "value"),
-        Input("sidebar-sample-radio",       "value"),
+        Input("sidebar-level-slider", "value"),
+        Input("sidebar-sample-radio", "value"),
     )
     def _refresh_diagnostics(algorithm: str, level: int, sample: str):
         level = int(level)
@@ -412,7 +412,7 @@ def _ranking_panel() -> html.Div:
         id=_RANKING_ID,
         children=[
             html.Div("Loading…", style={"color": MUTED, "padding": "24px",
-                                         "textAlign": "center", "fontSize": "12px"}),
+                                        "textAlign": "center", "fontSize": "12px"}),
         ],
         style={"padding": "8px 8px 12px", "overflowY": "auto", "flex": "1"},
     )
@@ -521,10 +521,10 @@ def _diagnostic_grid() -> html.Div:
         _graph_panel("Confusion Matrix", "rows = ground truth · cols = prediction",
                      _CONFUSION_ID, badge="CM", badge_color="#a07bff"),
         _graph_panel("Boundary Error (polar)",
-                     "angular distribution of mis-classified pixels",
+                     "errors by angle · green = active electrode · gray × = removed",
                      _BOUNDARY_ID, badge="∂", badge_color=DANGER),
         _graph_panel("Measurement Perturbation (polar)",
-                     "per-injection inclusion vs. empty-tank energy",
+                     "blue = strong signal · red = weakest 25% · yellow dashed = threshold",
                      _MEAS_ID, badge="V", badge_color=SUCCESS),
     ]
     return html.Div(
@@ -626,9 +626,9 @@ def _failure_legend() -> html.Div:
                                                  "fontSize": "11.5px",
                                                  "lineHeight": "1.5"}),
                 html.Div(meta["owner"], style={"color": MUTED,
-                                                "fontSize": "11px",
-                                                "marginTop": "6px",
-                                                "fontStyle": "italic"}),
+                                               "fontSize": "11px",
+                                               "marginTop": "6px",
+                                               "fontStyle": "italic"}),
             ],
             style={
                 **CARD_STYLE,
@@ -866,7 +866,7 @@ def _explanation(code: str | None, algorithm: str | None) -> html.Div:
         text = ("Pick a case from the ranked list or change the sidebar selectors "
                 "to assign a failure type and view the diagnostic panels.")
         return html.Div(text, style={"color": MUTED, "fontSize": "12.5px",
-                                      "lineHeight": "1.6"})
+                                     "lineHeight": "1.6"})
     meta = _FAILURE_TYPES[code]
     alg_note = (
         f"Matches the typical failure of {_LABEL.get(algorithm, '—')}."
@@ -882,7 +882,7 @@ def _explanation(code: str | None, algorithm: str | None) -> html.Div:
                        "lineHeight": "1.6", "marginBottom": "6px"},
             ),
             html.Div(alg_note, style={"color": MUTED, "fontSize": "11.5px",
-                                       "fontStyle": "italic"}),
+                                      "fontStyle": "italic"}),
         ],
     )
 
@@ -905,7 +905,7 @@ def _thumbnails_placeholder(msg: str = "—") -> html.Div:
         [
             _section_caption("Ground Truth vs Reconstruction"),
             html.Div(msg, style={"color": MUTED, "fontSize": "11.5px",
-                                  "fontStyle": "italic"}),
+                                 "fontStyle": "italic"}),
         ],
     )
 
@@ -932,12 +932,12 @@ def _thumb(label: str, seg: np.ndarray, accent: str) -> dcc.Graph:
         go.Heatmap(
             z=seg,
             colorscale=[
-                [0.0,  "#14142a"],
+                [0.0, "#14142a"],
                 [0.33, "#14142a"],
                 [0.34, "#5b8def"],
                 [0.66, "#5b8def"],
                 [0.67, "#e85d75"],
-                [1.0,  "#e85d75"],
+                [1.0, "#e85d75"],
             ],
             zmin=0, zmax=2, showscale=False,
             hovertemplate=f"{label}: %{{z}}<extra></extra>",
@@ -964,7 +964,7 @@ def _quick_metrics_placeholder(msg: str = "—") -> html.Div:
         [
             _section_caption("Quick Metrics (from cache)"),
             html.Div(msg, style={"color": MUTED, "fontSize": "11.5px",
-                                  "fontStyle": "italic"}),
+                                 "fontStyle": "italic"}),
         ],
     )
 
@@ -972,13 +972,12 @@ def _quick_metrics_placeholder(msg: str = "—") -> html.Div:
 def _quick_metrics_view(metrics: dict) -> html.Div:
     """3×N grid of the most actionable cached numbers."""
     items = [
-        ("IoU water",             metrics.get("iou_water"),       "{:.2f}",  None),
-        ("IoU resistive",         metrics.get("iou_resistive"),   "{:.2f}",  None),
-        ("IoU conductive",        metrics.get("iou_conductive"),  "{:.2f}",  None),
-        ("Hausdorff",             metrics.get("hausdorff"),       "{:.1f} px", "lower better"),
-        ("Position error",        metrics.get("position_error"),  "{:.1f} px", "lower better"),
-        ("Runtime",               metrics.get("runtime"),         "{:.2f} s",  "lower better"),
-        ("Spatial SSIM (min)",    metrics.get("ssim_min"),        "{:.3f}",  None),
+        ("IoU water",       metrics.get("iou_water"),       "{:.2f}",  None),
+        ("IoU resistive",   metrics.get("iou_resistive"),   "{:.2f}",  None),
+        ("IoU conductive",  metrics.get("iou_conductive"),  "{:.2f}",  None),
+        ("Hausdorff",       metrics.get("hausdorff"),       "{:.1f} px", "lower better"),
+        ("Position error",  metrics.get("position_error"),  "{:.1f} px", "lower better"),
+        ("Runtime",         metrics.get("runtime"),         "{:.2f} s",  "lower better"),
     ]
 
     def _fmt(value, tmpl):
@@ -994,7 +993,7 @@ def _quick_metrics_view(metrics: dict) -> html.Div:
         cells.append(html.Div(
             [
                 html.Div(label, style={"color": MUTED, "fontSize": "10.5px",
-                                        "letterSpacing": "0.3px"}),
+                                       "letterSpacing": "0.3px"}),
                 html.Div(
                     _fmt(value, tmpl),
                     style={"color": TEXT, "fontSize": "14px", "fontWeight": 700,
@@ -1002,7 +1001,7 @@ def _quick_metrics_view(metrics: dict) -> html.Div:
                            "marginTop": "2px"},
                 ),
                 html.Div(hint or "", style={"color": MUTED, "fontSize": "9.5px",
-                                             "fontStyle": "italic"}),
+                                            "fontStyle": "italic"}),
             ],
             style={
                 "backgroundColor": CARD_ALT,
@@ -1016,8 +1015,8 @@ def _quick_metrics_view(metrics: dict) -> html.Div:
         [
             _section_caption("Quick Metrics (from cache)"),
             html.Div(cells, style={"display": "grid",
-                                    "gridTemplateColumns": "repeat(3, 1fr)",
-                                    "gap": "6px"}),
+                                   "gridTemplateColumns": "repeat(3, 1fr)",
+                                   "gap": "6px"}),
         ],
     )
 
@@ -1027,7 +1026,7 @@ def _signal_breakdown_placeholder(msg: str = "—") -> html.Div:
         [
             _section_caption("Why this badge? Classifier signal scores"),
             html.Div(msg, style={"color": MUTED, "fontSize": "11.5px",
-                                  "fontStyle": "italic"}),
+                                 "fontStyle": "italic"}),
         ],
     )
 
@@ -1116,9 +1115,9 @@ def _signal_breakdown_view(
 
 def _banner(text: str, kind: str = "info") -> html.Div:
     palette = {
-        "info":  (ACCENT_SOFT, "rgba(91,141,239,0.08)"),
-        "warn":  (WARN,        "rgba(244,200,112,0.10)"),
-        "error": (DANGER,      "rgba(232,93,117,0.10)"),
+        "info": (ACCENT_SOFT, "rgba(91,141,239,0.08)"),
+        "warn": (WARN, "rgba(244,200,112,0.10)"),
+        "error": (DANGER, "rgba(232,93,117,0.10)"),
     }
     border, bg = palette.get(kind, palette["info"])
     return html.Div(
@@ -1221,7 +1220,7 @@ def _classify_failure(
         "C": swap,
         "D": erosion,
         "E": fn * (1.5 if algorithm == "pnpe2e" else 0.0)
-             + inclusion_balance * (0.5 if algorithm == "pnpe2e" else 0.0),
+        + inclusion_balance * (0.5 if algorithm == "pnpe2e" else 0.0),
     }
 
     # Strong unique signal → respect it
@@ -1345,9 +1344,17 @@ def _boundary_radial_figure(
     counts, _ = np.histogram(angles_deg, bins=bin_edges)
     centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
 
-    # Active electrode angles for the selected level
-    active = subsample_electrodes(level)
-    el_angles = [(360.0 * idx / 32.0) % 360 for idx in active]
+    # Electrode geometry: 32 positions equally spaced around the rim.
+    # The current level keeps `active` (drawn green); the rest are removed
+    # (drawn dim gray so the user can see the measurement gaps).
+    active = set(subsample_electrodes(level))
+    all_angles = [(360.0 * idx / 32.0) % 360 for idx in range(32)]
+    active_angles  = [a for i, a in enumerate(all_angles) if i in active]
+    removed_angles = [a for i, a in enumerate(all_angles) if i not in active]
+
+    rmax = float(counts.max()) if counts.max() > 0 else 1.0
+    r_rim = rmax * 1.18                       # ring sits clearly outside the bars
+    r_axis_max = rmax * 1.30                   # leave headroom so dots aren't clipped
 
     fig = go.Figure()
     fig.add_trace(go.Barpolar(
@@ -1363,14 +1370,27 @@ def _boundary_radial_figure(
         name="Error count",
     ))
 
-    rmax = float(counts.max()) if counts.max() > 0 else 1.0
+    # Removed electrodes (faint gray X marks)
+    if removed_angles:
+        fig.add_trace(go.Scatterpolar(
+            r=[r_rim] * len(removed_angles),
+            theta=removed_angles,
+            mode="markers",
+            marker=dict(size=10, color="rgba(154,160,180,0.55)",
+                        symbol="x-thin",
+                        line=dict(color="#9aa0b4", width=1.4)),
+            name="Removed electrode",
+            hovertemplate="removed @ %{theta:.0f}°<extra></extra>",
+        ))
+
+    # Active electrodes (bright green dots)
     fig.add_trace(go.Scatterpolar(
-        r=[rmax * 1.08] * len(el_angles),
-        theta=el_angles,
+        r=[r_rim] * len(active_angles),
+        theta=active_angles,
         mode="markers",
-        marker=dict(size=7, color=SUCCESS, symbol="circle",
-                    line=dict(color="#000", width=0.4)),
-        name="Active electrode",
+        marker=dict(size=11, color=SUCCESS, symbol="circle",
+                    line=dict(color="#0a0a18", width=1.0)),
+        name=f"Active electrode ({len(active_angles)})",
         hovertemplate="electrode @ %{theta:.0f}°<extra></extra>",
     ))
 
@@ -1380,10 +1400,11 @@ def _boundary_radial_figure(
             bgcolor="#14142a",
             radialaxis=dict(tickfont=dict(color=MUTED, size=9),
                             gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                            angle=90, tickangle=90),
+                            angle=90, tickangle=90,
+                            range=[0, r_axis_max]),
             angularaxis=dict(tickfont=dict(color=TEXT, size=10),
-                              gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                              direction="counterclockwise", rotation=0),
+                             gridcolor="#2a2a4a", linecolor="#2a2a4a",
+                             direction="counterclockwise", rotation=0),
         ),
         showlegend=True,
         legend=dict(font=dict(color=TEXT, size=11),
@@ -1426,9 +1447,17 @@ def _measurement_residual_figure(
 
     n = len(per_inj)
     angles = np.linspace(0.0, 360.0, n, endpoint=False)
-    threshold = float(np.median(per_inj) * 0.4) if n else 0.0
 
-    colors = ["#e85d75" if v < threshold else "#5b8def" for v in per_inj]
+    # Weak-signal threshold = 25th percentile of per-injection perturbation.
+    # This is robust across levels: at L1 ref subtraction is exact; at L2-L7
+    # the cached ref.mat is sliced to match the subsampled shape (approximate),
+    # so a percentile cutoff stays meaningful even when raw magnitudes shift.
+    if n:
+        threshold = float(np.percentile(per_inj, 25))
+    else:
+        threshold = 0.0
+
+    colors = ["#e85d75" if v <= threshold else "#5b8def" for v in per_inj]
 
     fig = go.Figure()
     fig.add_trace(go.Barpolar(
@@ -1436,19 +1465,20 @@ def _measurement_residual_figure(
         theta=angles,
         width=[360 / max(n, 1)] * n,
         marker=dict(color=colors, line=dict(color="#1e1e2f", width=0.4)),
-        hovertemplate="injection %{theta:.0f}°<br>||ΔV||=%{r:.4f}<extra></extra>",
+        hovertemplate=("injection %{theta:.0f}°<br>"
+                       "‖ΔV‖=%{r:.4f}<extra></extra>"),
         name="‖V − V_ref‖",
     ))
-    # Threshold ring
+    # Threshold ring — drawn AFTER the bars so it sits on top of them.
     if threshold > 0 and n:
-        ring_theta = np.linspace(0, 360, 120)
+        ring_theta = np.linspace(0, 360, 180)
         fig.add_trace(go.Scatterpolar(
             r=[threshold] * len(ring_theta),
             theta=ring_theta,
             mode="lines",
-            line=dict(color=WARN, width=1.2, dash="dash"),
+            line=dict(color=WARN, width=2.0, dash="dash"),
             hoverinfo="skip",
-            name="weak-signal threshold",
+            name=f"weak-signal threshold (P25 = {threshold:.3f})",
         ))
 
     fig.update_layout(
@@ -1459,8 +1489,8 @@ def _measurement_residual_figure(
                             gridcolor="#2a2a4a", linecolor="#2a2a4a",
                             angle=90, tickangle=90),
             angularaxis=dict(tickfont=dict(color=TEXT, size=10),
-                              gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                              direction="counterclockwise", rotation=0),
+                             gridcolor="#2a2a4a", linecolor="#2a2a4a",
+                             direction="counterclockwise", rotation=0),
         ),
         showlegend=True,
         legend=dict(font=dict(color=TEXT, size=11),

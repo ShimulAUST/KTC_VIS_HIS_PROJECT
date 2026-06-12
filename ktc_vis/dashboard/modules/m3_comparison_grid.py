@@ -17,7 +17,6 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
-import scipy.io
 from dash import Input, Output, dcc, html
 
 from ktc_vis.adapters import ReferenceOutputAdapter
@@ -49,8 +48,8 @@ _SAMPLE_MAP = {"a": 1, "b": 2, "c": 3, "d": 4}
 # ── Algorithm registry ─────────────────────────────────────────────────────────
 _ALGORITHMS: list[str] = ["abc1", "cuqi8", "pnpe2e"]
 _ALG_COLORS: dict[str, str] = {
-    "abc1":   "#5b8def",   # blue
-    "cuqi8":  "#e85d75",   # pink
+    "abc1": "#5b8def",   # blue
+    "cuqi8": "#e85d75",   # pink
     "pnpe2e": "#f4c870",   # gold
 }
 
@@ -66,16 +65,16 @@ def _get_adapter(name: str) -> ReferenceOutputAdapter:
 
 
 # ── IDs (all prefixed with ``m3-``) ───────────────────────────────────────────
-_CHIPS_ID   = "m3-chips"
-_BANNER_ID  = "m3-banner"
+_CHIPS_ID = "m3-chips"
+_BANNER_ID = "m3-banner"
 # Reconstruction row
-_RECON_IDS  = {alg: f"m3-recon-{alg}" for alg in _ALGORITHMS}
+_RECON_IDS = {alg: f"m3-recon-{alg}" for alg in _ALGORITHMS}
 # Pairwise diff row
 _DIFF_PAIRS = [("abc1", "cuqi8"), ("abc1", "pnpe2e"), ("cuqi8", "pnpe2e")]
-_DIFF_IDS   = {(a, b): f"m3-diff-{a}-{b}" for a, b in _DIFF_PAIRS}
+_DIFF_IDS = {(a, b): f"m3-diff-{a}-{b}" for a, b in _DIFF_PAIRS}
 # Bottom row
 _VOLTAGE_ID = "m3-voltage-chart"
-_SCORE_ID   = "m3-scorecard"
+_SCORE_ID = "m3-scorecard"
 
 # ── Shared style helpers ───────────────────────────────────────────────────────
 _PANEL_HDR = {
@@ -430,9 +429,9 @@ def _chip(label: str, value: str, accent: str | None = None) -> html.Div:
 
 def _banner(message: str, kind: str = "info") -> html.Div:
     palette = {
-        "info":  ("#1f3a5f", "#5b8def", "#cfe0ff"),
-        "warn":  ("#3a2a1a", WARN,      "#f4c870"),
-        "error": ("#3a1f25", DANGER,    "#ffd1d8"),
+        "info": ("#1f3a5f", "#5b8def", "#cfe0ff"),
+        "warn": ("#3a2a1a", WARN, "#f4c870"),
+        "error": ("#3a1f25", DANGER, "#ffd1d8"),
     }
     bg, border, fg = palette.get(kind, palette["info"])
     return html.Div(message, style={
@@ -456,11 +455,11 @@ _SEG_COLORSCALE = [
 ]
 
 _DIFF_COLORSCALE = [
-    [0.0,  "#7b61ff"],   # −2: A much higher (purple)
+    [0.0, "#7b61ff"],   # −2: A much higher (purple)
     [0.25, "#a07bff"],   # −1
-    [0.5,  "#1e1e2f"],   # 0: identical (dark background)
+    [0.5, "#1e1e2f"],   # 0: identical (dark background)
     [0.75, "#f4c870"],   # +1
-    [1.0,  "#e8a030"],   # +2: B much higher (gold)
+    [1.0, "#e8a030"],   # +2: B much higher (gold)
 ]
 
 
@@ -527,190 +526,171 @@ def _diff_figure(
     return fig
 
 
-_VOLT_COLORSCALE = [
-    [0.00, "#c62828"],   # -1 : vivid red
-    [0.25, "#ef9a9a"],   # -0.5: light red
-    [0.50, "#f5f5f5"],   # 0  : neutral white
-    [0.75, "#90caf9"],   # +0.5: light blue
-    [1.00, "#1565c0"],   # +1 : vivid blue
-]
-
-
 def _voltage_figure(measurement) -> go.Figure:
-    """Heatmap of the full normalised voltage measurement matrix.
-
-    Rows = injection patterns, columns = measurement channels.
-    Each row is normalised by its own peak absolute value so that
-    injection patterns with very different magnitudes are directly
-    comparable on a single diverging scale (−1 … 0 … +1).
-    Red = −1 (bottom), Blue = +1 (top).
-    """
+    """Heatmap of the voltage measurement matrix (injections × channels)."""
     V = measurement.voltage_matrix  # (n_inj, n_channels)
 
+    # Normalise each injection row to highlight pattern shape, not magnitude
     row_max = np.abs(V).max(axis=1, keepdims=True)
     row_max = np.where(row_max == 0, 1.0, row_max)
-    V_norm = V / row_max  # each row in [−1, 1]
+    V_norm = V / row_max
 
     n_inj, n_ch = V.shape
-    level  = measurement.level
-    sample = measurement.sample
-
-    # Avoid crowding tick labels on large axes
-    x_dtick = max(1, n_ch  // 12)
-    y_dtick = max(1, n_inj // 10)
-
     fig = go.Figure(
         go.Heatmap(
             z=V_norm,
-            x=list(range(1, n_ch  + 1)),
-            y=list(range(1, n_inj + 1)),
-            colorscale=_VOLT_COLORSCALE,
+            colorscale="RdBu",
             zmid=0,
-            zmin=-1,
-            zmax=1,
+            showscale=True,
             colorbar=dict(
-                title=dict(
-                    text="Norm V",
-                    font=dict(color=MUTED, size=9),
-                    side="right",
-                ),
+                thickness=8, len=0.8,
+                title=dict(text="norm. V", font=dict(color=MUTED, size=9),
+                           side="right"),
                 tickfont=dict(color=MUTED, size=9),
-                # intermediate ticks only — extremes rendered as coloured annotations
-                tickvals=[-0.5, 0, 0.5],
-                ticktext=["-0.5", "0", "+0.5"],
-                thickness=12,
-                len=0.85,
-                x=1.02,
-                y=0.5,
-                yanchor="middle",
             ),
             hovertemplate=(
-                "Injection: %{y}<br>"
-                "Channel: %{x}<br>"
-                "Norm-V: %{z:.3f}"
-                "<extra></extra>"
+                "inj:%{y}<br>ch:%{x}<br>norm-V:%{z:.3f}<extra></extra>"
             ),
         )
     )
-
     fig.update_layout(
         paper_bgcolor=CARD,
         plot_bgcolor="#1a1a2e",
-        margin=dict(l=56, r=64, t=44, b=48),
+        margin=dict(l=48, r=48, t=36, b=36),
         title=dict(
             text=(
-                f"Voltage Measurement Pattern · L{level}/{sample.upper()} "
+                f"Voltage Matrix · L{measurement.level}/{measurement.sample.upper()} "
                 f"· {n_inj} injections × {n_ch} channels"
             ),
-            x=0.5,
-            font=dict(color="#ddd", size=11),
+            x=0.5, font=dict(color="#ddd", size=11),
         ),
         xaxis=dict(
             title=dict(text="Measurement channel", font=dict(color=MUTED, size=10)),
             tickfont=dict(color=MUTED, size=9),
-            gridcolor="#2e2e44",
-            zeroline=False,
-            dtick=x_dtick,
+            gridcolor="#2e2e44", zeroline=False,
         ),
         yaxis=dict(
-            title=dict(text="Injection #", font=dict(color=MUTED, size=10)),
+            title=dict(text="Injection pattern", font=dict(color=MUTED, size=10)),
             tickfont=dict(color=MUTED, size=9),
-            gridcolor="#2e2e44",
-            zeroline=False,
-            autorange="reversed",   # injection 1 at the top
-            dtick=y_dtick,
+            gridcolor="#2e2e44", zeroline=False,
+            autorange="reversed",
         ),
         uirevision="constant",
-        # Coloured extreme labels: +1 blue (top), −1 red (bottom)
-        annotations=[
-            dict(
-                text="<b>+1</b>",
-                xref="paper", yref="paper",
-                x=1.075, y=0.925,
-                xanchor="left",
-                showarrow=False,
-                font=dict(color="#1565c0", size=11),
-            ),
-            dict(
-                text="<b>−1</b>",
-                xref="paper", yref="paper",
-                x=1.075, y=0.075,
-                xanchor="left",
-                showarrow=False,
-                font=dict(color="#c62828", size=11),
-            ),
-        ],
     )
     return fig
 
 
 # ── Metrics scorecard ──────────────────────────────────────────────────────────
-#
-# All 11 metrics from the README metrics table, organised by category.
-# Tuple: (cache_key, display_label, higher_better, fmt, kind)
-#   kind = "scalar"  → numeric value from HDF5 cache, shows ★ for best
-#   kind = "pending" → not yet implemented in metrics engine  — shows "—"
 
-_METRIC_KEYS = [
-    # ── Image Quality ──────────────────────────────────────────────────────────
-    ("ssim",                    "SSIM Score",            True,  ".3f", "scalar"),
-    ("ssim_min",                "Spatial SSIM (min)",    True,  ".3f", "scalar"),
-    # ── Shape Matching ─────────────────────────────────────────────────────────
-    ("hausdorff",               "Hausdorff Dist (px)",   False, ".1f", "scalar"),
-    ("position_error",          "Position Error (px)",   False, ".1f", "scalar"),
-    ("resolution",              "Resolution (px)",       False, ".1f", "scalar"),
-    # ── Class Specific ─────────────────────────────────────────────────────────
-    ("confusion_accuracy",       "Confusion Accuracy",    True,  ".3f", "scalar"),
-    ("iou_mean",                "Mean IoU",              True,  ".3f", "scalar"),
-    ("iou_water",               "IoU Water",             True,  ".3f", "scalar"),
-    ("iou_resistive",           "IoU Resistive",         True,  ".3f", "scalar"),
-    ("iou_conductive",          "IoU Conductive",        True,  ".3f", "scalar"),
-    # ── Data Efficiency ────────────────────────────────────────────────────────
-    ("runtime",                 "Runtime (s)",           False, ".4f", "scalar"),
-    # ── Measurement Domain ─────────────────────────────────────────────────────
-    ("voltage_residual",        "Voltage Residual",      False, ".4f", "scalar"),
-    ("resistance_consistency",  "Resistance Consist.",   True,  ".3f", "scalar"),
+# (metric_key, display_label, higher_is_better, format_spec)
+_METRIC_KEYS: list[tuple[str, str, bool, str]] = [
+    # Image Quality
+    ("ssim",                   "SSIM Score",           True,  ".3f"),
+    ("ssim_min",               "Spatial SSIM (min)",   True,  ".3f"),
+    # Shape Matching
+    ("hausdorff",              "Hausdorff Dist (px)",  False, ".1f"),
+    ("position_error",         "Position Error (px)",  False, ".1f"),
+    ("resolution",             "Resolution (px)",      False, ".1f"),
+    # Class Specific
+    ("confusion_accuracy",     "Confusion Accuracy",   True,  ".3f"),
+    ("iou_mean",               "Mean IoU",             True,  ".3f"),
+    ("iou_water",              "IoU Water",            True,  ".3f"),
+    ("iou_resistive",          "IoU Resistive",        True,  ".3f"),
+    ("iou_conductive",         "IoU Conductive",       True,  ".3f"),
+    ("dice_mean",              "Mean Dice",            True,  ".3f"),
+    ("dice_water",             "Dice Water",           True,  ".3f"),
+    ("dice_resistive",         "Dice Resistive",       True,  ".3f"),
+    ("dice_conductive",        "Dice Conductive",      True,  ".3f"),
+    # Data Efficiency
+    ("runtime",                "Runtime (s)",          False, ".4f"),
+    # Measurement Domain
+    ("voltage_residual",       "Voltage Residual",     False, ".4f"),
+    ("resistance_consistency", "Resistance Consist.",  True,  ".3f"),
+    ("current_sensitivity",    "Current Sensitivity",  True,  ".3f"),
 ]
 
-# First metric index for each category (used to insert section-header rows)
+# Row indices (into _METRIC_KEYS) where a new section header should be rendered.
 _METRIC_SECTIONS: dict[int, str] = {
     0:  "Image Quality",
     2:  "Shape Matching",
     5:  "Class Specific",
-    10: "Data Efficiency",
-    11: "Measurement Domain",
+    14: "Data Efficiency",
+    15: "Measurement Domain",
 }
+
+_EXPECTED_METRIC_KEYS: set[str] = {key for key, *_ in _METRIC_KEYS}
 
 
 def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
-    """Return metrics from cache, or compute on-the-fly if reconstruction available."""
-    # 1. Try cache first
-    try:
-        import h5py
-        if _CACHE_PATH.exists():
-            key = f"results/{algorithm}/{level}/{sample}"
-            with h5py.File(str(_CACHE_PATH), "r") as f:
-                if key in f:
-                    grp = f[key]
-                    return {
-                        k: float(grp[k][()])
-                        for k in grp.keys()
-                        if k != "reconstruction"
-                    }
-    except Exception:
-        pass
+    """Return metrics from cache, augmenting any keys missing from older cache entries.
 
-    # 2. Try to compute metrics if reconstruction can be loaded
+    Flow:
+      1. Cache hit → use cached metrics, but if the entry pre-dates a newer
+         metric (Dice, measurement-domain, etc.) recompute the missing scalars
+         from the cached reconstruction and persist them back. The adapter is
+         never re-run.
+      2. Cache miss → fall back to the full MetricsEngine.compute_all path,
+         which will invoke the adapter if necessary.
+    """
+    metrics: dict | None = None
+    reconstruction = None
+
     try:
-        measurement = _LOADER.load(level=level, sample=sample)
-        adapter = _get_adapter(algorithm)
-        from ktc_vis.metrics.engine import MetricsEngine
-        engine = MetricsEngine(adapter, cache_path=_CACHE_PATH)
-        return engine.compute_all(measurement)
-    except Exception as exc:
-        logger.debug("M3 metrics computation failed for %s L%d/%s: %s",
-                     algorithm, level, sample, exc)
-        return None
+        from ktc_vis.cache.hdf5_store import load_result
+        metrics, reconstruction = load_result(
+            algorithm, level, sample, cache_path=_CACHE_PATH
+        )
+    except Exception:
+        metrics = None
+
+    # Full cache miss → compute from scratch
+    if metrics is None:
+        try:
+            measurement = _LOADER.load(level=level, sample=sample)
+            adapter = _get_adapter(algorithm)
+            from ktc_vis.metrics.engine import MetricsEngine
+            engine = MetricsEngine(adapter, cache_path=_CACHE_PATH)
+            return engine.compute_all(measurement)
+        except Exception as exc:
+            logger.debug(
+                "M3 metrics computation failed for %s L%d/%s: %s",
+                algorithm, level, sample, exc,
+            )
+            return None
+
+    # Cache hit → backfill any missing keys without re-running the adapter
+    missing = _EXPECTED_METRIC_KEYS - set(metrics.keys())
+    if missing and reconstruction is not None:
+        try:
+            measurement = _LOADER.load(level=level, sample=sample)
+            from ktc_vis.metrics.engine import MetricsEngine
+            engine = MetricsEngine(_get_adapter(algorithm), cache_path=_CACHE_PATH)
+            recomputed = engine._compute_metrics_from_reconstruction(
+                measurement,
+                reconstruction.astype(np.uint8),
+                runtime=float(metrics.get("runtime", 0.0)),
+            )
+            for key in missing:
+                if key in recomputed:
+                    metrics[key] = recomputed[key]
+            try:
+                from ktc_vis.cache.hdf5_store import save_result
+                save_result(
+                    algorithm, level, sample, metrics, reconstruction,
+                    cache_path=_CACHE_PATH,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "M3 cache write-back failed for %s L%d/%s: %s",
+                    algorithm, level, sample, exc,
+                )
+        except Exception as exc:
+            logger.debug(
+                "M3 metric backfill failed for %s L%d/%s: %s",
+                algorithm, level, sample, exc,
+            )
+
+    return metrics
 
 
 def _scorecard_children(
@@ -744,47 +724,34 @@ def _scorecard_children(
     rows.append(html.Tr(header_cells))
 
     # ── Data rows ─────────────────────────────────────────────────────────────
-    for idx, (key, label, higher_better, fmt, kind) in enumerate(_METRIC_KEYS):
-
-        # Insert category section header when a new group starts
+    for idx, (key, label, higher_better, fmt) in enumerate(_METRIC_KEYS):
+        # Section header
         if idx in _METRIC_SECTIONS:
-            rows.append(
-                html.Tr(
-                    html.Td(
-                        _METRIC_SECTIONS[idx].upper(),
-                        colSpan=len(_ALGORITHMS) + 1,
-                        style={
-                            "padding": "10px 10px 4px",
-                            "color": ACCENT,
-                            "fontSize": "9.5px",
-                            "fontWeight": 700,
-                            "letterSpacing": "0.8px",
-                            "borderTop": f"1px solid {BORDER}",
-                        },
-                    )
-                )
-            )
+            rows.append(html.Tr(html.Td(
+                _METRIC_SECTIONS[idx].upper(),
+                colSpan=len(_ALGORITHMS) + 1,
+                style={
+                    "padding": "10px 10px 4px",
+                    "color": ACCENT,
+                    "fontSize": "9.5px",
+                    "fontWeight": 700,
+                    "letterSpacing": "0.8px",
+                    "borderTop": f"1px solid {BORDER}",
+                },
+            )))
 
-        # ── pending metric — not yet implemented in the metrics engine ─────────
-        if kind == "pending":
-            cells = [html.Td(label, style=_td_label_style())]
-            for _ in _ALGORITHMS:
-                cells.append(html.Td("—", style={**_td_style(False, False), "color": MUTED}))
-            rows.append(html.Tr(cells, style={"borderBottom": f"1px solid {BORDER}"}))
-            continue
-
-        # ── scalar metric — numeric value from HDF5 cache ─────────────────────
-        vals: dict[str, float | None] = {}
-        for alg in _ALGORITHMS:
-            vals[alg] = all_metrics[alg].get(key) if all_metrics[alg] else None
+        # Collect values
+        vals: dict[str, float | None] = {
+            alg: (all_metrics[alg].get(key) if all_metrics[alg] else None)
+            for alg in _ALGORITHMS
+        }
         numeric = [v for v in vals.values() if v is not None]
-        # When ALL values are missing show the row with "—" so the metric name
-        # is still visible (e.g. voltage_residual not yet in old cache entries)
         if not numeric:
-            cells = [html.Td(label, style=_td_label_style())]
-            for _ in _ALGORITHMS:
-                cells.append(html.Td("—", style={**_td_style(False, False), "color": MUTED}))
-            rows.append(html.Tr(cells, style={"borderBottom": f"1px solid {BORDER}"}))
+            dash_cell = html.Td("—", style=_td_style(False, False))
+            rows.append(html.Tr(
+                [html.Td(label, style=_td_label_style())] + [dash_cell for _ in _ALGORITHMS],
+                style={"borderBottom": f"1px solid {BORDER}"},
+            ))
             continue
 
         best = max(numeric) if higher_better else min(numeric)
@@ -895,21 +862,21 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     """Wire sidebar selectors to all M3 panels."""
 
     # Flat output list: recon figures + diff figures + voltage + scorecard + chips + banner
-    recon_outputs  = [Output(_RECON_IDS[alg], "figure") for alg in _ALGORITHMS]
-    diff_outputs   = [Output(_DIFF_IDS[pair], "figure") for pair in _DIFF_PAIRS]
-    other_outputs  = [
+    recon_outputs = [Output(_RECON_IDS[alg], "figure") for alg in _ALGORITHMS]
+    diff_outputs = [Output(_DIFF_IDS[pair], "figure") for pair in _DIFF_PAIRS]
+    other_outputs = [
         Output(_VOLTAGE_ID, "figure"),
-        Output(_SCORE_ID,   "children"),
-        Output(_CHIPS_ID,   "children"),
-        Output(_BANNER_ID,  "children"),
+        Output(_SCORE_ID, "children"),
+        Output(_CHIPS_ID, "children"),
+        Output(_BANNER_ID, "children"),
     ]
 
     @app.callback(
         *recon_outputs,
         *diff_outputs,
         *other_outputs,
-        Input("sidebar-level-slider",      "value"),
-        Input("sidebar-sample-radio",      "value"),
+        Input("sidebar-level-slider", "value"),
+        Input("sidebar-sample-radio", "value"),
         Input("sidebar-algorithm-dropdown", "value"),
     )
     def _update_all(level: int, sample: str, selected_alg: str):
@@ -971,16 +938,16 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
         # ── 7. Chips ──────────────────────────────────────────────────────────
         chips = [
-            _chip("level",  f"L{level}",      accent=WARN),
-            _chip("sample", sample.upper(),   accent="#cfe0ff"),
+            _chip("level", f"L{level}", accent=WARN),
+            _chip("sample", sample.upper(), accent="#cfe0ff"),
             _chip("loaded", f"{n_loaded}/3",
                   accent=SUCCESS if n_loaded == 3 else DANGER),
         ]
         if measurement is not None:
             n_inj, n_ch = measurement.voltage_matrix.shape
             chips += [
-                _chip("injections",  str(n_inj)),
-                _chip("V channels",  str(n_ch)),
+                _chip("injections", str(n_inj)),
+                _chip("V channels", str(n_ch)),
             ]
         # Per-algorithm agreement chips
         if measurement is not None:
@@ -1000,5 +967,3 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     )
 
         return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
-
-
