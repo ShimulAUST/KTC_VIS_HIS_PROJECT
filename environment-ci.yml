@@ -18,6 +18,7 @@ dependencies:
   # ── Dashboard & Visualization ────────────────────────────────
   - plotly=5.18.0
   - dash=2.14.2
+  - importlib-metadata  # required by dash at import time; not pulled in by conda
 
   # ── Scientific Computing ─────────────────────────────────────
   - numpy=1.26.2
