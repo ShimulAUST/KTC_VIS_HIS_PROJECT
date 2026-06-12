@@ -20,7 +20,10 @@ jobs:
       - name: Set up Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
-          environment-file: environment.yml
+          # Slim env: the full environment.yml (PyTorch/JupyterLab/deepinv)
+          # exceeds the runner's disk and fails with ENOSPC. Adapter tests
+          # that need the ML stack are skipped in CI anyway.
+          environment-file: environment-ci.yml
           activate-environment: ktc-vis
           auto-activate-base: false
           # Skip FEniCS in CI (uses mock adapter for CUQI8 tests)
