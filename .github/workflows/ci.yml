@@ -34,7 +34,8 @@ jobs:
         run: pip install -e . --no-deps
 
       - name: Lint with flake8
-        run: flake8 ktc_vis/ --max-line-length=100 --ignore=E501,W503
+        # E221/E241 are cosmetic alignment codes left intact in module files.
+        run: flake8 ktc_vis/ --max-line-length=100 --ignore=E501,W503,E221,E241
 
       - name: Run tests with coverage
         run: |

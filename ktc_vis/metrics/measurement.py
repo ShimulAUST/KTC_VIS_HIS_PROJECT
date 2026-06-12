@@ -80,10 +80,10 @@ def compute_current_sensitivity_balance(measurement: KTCMeasurement) -> float:
     Returns:
         Balance score in [0, 1]. Higher means more uniform electrode usage.
     """
-    I = np.asarray(measurement.current_matrix, dtype=np.float64)
-    if I.size == 0:
+    currents = np.asarray(measurement.current_matrix, dtype=np.float64)
+    if currents.size == 0:
         return 0.0
-    per_electrode = np.abs(I).sum(axis=0)
+    per_electrode = np.abs(currents).sum(axis=0)
     mean = float(per_electrode.mean())
     if mean < _EPS:
         return 0.0
