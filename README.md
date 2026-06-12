@@ -73,26 +73,28 @@ There is no open tool that loads all KTC2023 algorithms, runs them on the same d
 ### Module 1 — Reconstruction Explorer
 > **Owner: Muhammad Muzammal**
 
-Inspect any (algorithm, level, sample) combination across 4 side-by-side panels:
-- Ground Truth Segmentation
-- Reconstructed Conductivity / Heatmap
-- Predicted 3-Class Segmentation
-- Error Overlay
+Inspect any (algorithm, level, sample) combination in a two-row layout:
+- **Comparison row:** Ground Truth | Reconstruction (hero panels)
+- **Analysis row:** Predicted 3-Class Segmentation | Error Overlay (green = correct, red = false positive, blue = false negative, yellow = wrong class)
+- Live stat chips: electrodes, injections, voltage samples, pixel agreement %
 
 ### Module 2 — Difficulty Animator
 > **Owner: Shimul Paul**
 
-Level 1–7 slider animates how each algorithm degrades. Shows degradation curves for SSIM, IoU, Dice, Hausdorff distance, and runtime.
+Level 1–7 slider with ▶ Play/⏸ Pause loop animation (1.2 s/level) showing how each algorithm degrades as electrodes are removed. Side-by-side Ground Truth / Segmentation / Error Overlay panels plus seven degradation curves: SSIM, mean IoU, Dice, Hausdorff distance, position error, resolution, and runtime — with the current level marked on every curve.
 
 ### Module 3 — Side-by-Side Comparison Grid
 > **Owner: Smit Savani**
 
-Three-column grid showing all algorithms at the same level/sample simultaneously. Includes pairwise difference images and voltage residual chart.
+Three-row comparison of all algorithms at the same (level, sample):
+- **Row 1:** ABC1 | CUQI8 | PNPE2E reconstructions
+- **Row 2:** Pairwise pixel-difference images (3 pairs)
+- **Row 3:** Voltage measurement chart + metrics scorecard
 
 ### Module 4 — Fingerprint Radar
 > **Owner: Asmita Bhuva**
 
-9-axis radar chart comparing algorithm performance profiles:
+9-axis radar chart ("performance polygon") comparing algorithm profiles, computed from the HDF5 cache for the selected level/sample. All axes are min-max normalized to [0, 1]; "lower is better" axes (Speed, Robustness, Voltage Residual) are inverted so outward always means better. Algorithm toggles and a score summary table sit below the radar.
 
 | Axis | Domain |
 |------|--------|
@@ -111,11 +113,13 @@ Expected shapes: CUQI8 → narrow/tall; ABC1 → wide/low; PNPE2E → balanced/i
 ### Module 5 — Failure Autopsy
 > **Owners: Muhammad Muzammal & Asmita Bhuva**
 
-Ranked worst-case list by SSIM. Click any case to open 4 diagnostic panels:
-- Spatial SSIM heatmap
-- 3×3 material confusion matrix
-- Boundary-error radial plot
-- Measurement residual polar plot
+Ranked worst-case list by SSIM; clicking a row snaps the shared sidebar to that case and opens 4 diagnostic panels:
+- Spatial SSIM heatmap — which pixels drove the score down
+- 3×3 material confusion matrix — class-level misclassification pattern
+- Boundary-error polar plot — angular distribution of errors, with active/removed electrodes marked on the rim
+- Measurement residual polar plot — per-injection ‖V − V_ref‖ inclusion energy with a weak-signal threshold ring
+
+A failure-type badge (A–E) is auto-assigned from the diagnostic signals.
 
 **Failure taxonomy (Types A–F):**
 
@@ -130,10 +134,10 @@ Ranked worst-case list by SSIM. Click any case to open 4 diagnostic panels:
 ### Module 6 — Measurement Domain Viewer
 > **Owners: Smit Savani & Shimul Paul**
 
-Explore raw electrical measurements independent of reconstruction:
-- **Current panel:** Polar plot of injected current patterns (electrodes 1–32, magnitude = bar height).
-- **Voltage panel:** Polar measured voltages + difference plot (inclusion vs. empty tank).
-- **Resistance panel:** R=V/I at one electrode pair + 2D resistance map (rows=injection patterns, columns=measurement pairs).
+Explore the raw electrical measurements independent of any reconstruction. An injection-step slider with ▶ Play animation (0.9 s/step) steps through every injection pattern:
+- **Current panel:** Polar bar chart of the injected current pattern — angle = electrode position on the 32-slot rim, bar height = |I|, red = source / blue = sink. Electrodes removed at higher levels are marked with gray crosses.
+- **Voltage panel:** Polar plot of measured electrode voltages with the empty-tank reference overlaid, plus a ΔV = Uel − Uelref bar chart — the actual input signal to ABC1 and the residual CUQI8 fits. The reference is subsampled through the same pipeline as the data, so the difference is exact at every level.
+- **Resistance panel:** R = V/I scatter for the selected injection + 2D resistance map (rows = injections, columns = measurement pairs) with a guided 3-step view: ① the selected injection's row only, ② a build-up that fills in row by row while stepping/playing through injections, ③ the full map with the selected row outlined — highlighting which combinations carry the most information.
 
 ---
 
