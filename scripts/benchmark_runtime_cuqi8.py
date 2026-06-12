@@ -7,7 +7,7 @@ Usage:
     python scripts/benchmark_runtime_cuqi8.py                   # levels 1-7, all samples
     python scripts/benchmark_runtime_cuqi8.py --levels 1 2      # only L1, L2
     python scripts/benchmark_runtime_cuqi8.py --samples a b     # only samples A, B
-    python scripts/benchmark_runtime_cuqi8.py --memory 10g      # override RAM cap (default 8g)
+    python scripts/benchmark_runtime_cuqi8.py --memory 10g      # set a RAM cap (default: unlimited)
     python scripts/benchmark_runtime_cuqi8.py --dry-run         # print commands, don't run
 """
 
@@ -30,7 +30,6 @@ _CACHE_PATH = _PROJECT_ROOT / "data" / "cache" / "results.h5"
 _MEASUREMENTS_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023" / "measurements"
 
 _IMAGE = "muzammal5566/ktc2023-cuqi8:latest"
-_DEFAULT_MEMORY = "8g"
 
 _INDEX_TO_SAMPLE = {1: "a", 2: "b", 3: "c", 4: "d"}
 _SAMPLE_TO_INDEX = {v: k for k, v in _INDEX_TO_SAMPLE.items()}
@@ -39,17 +38,15 @@ _ALL_SAMPLES = ["a", "b", "c", "d"]
 
 def _write_training_data(training_dir: Path, level: int, sample: str) -> None:
     """Write ref.mat + one data<idx>.mat for a single sample."""
-    sys.path.insert(0, str(_PROJECT_ROOT))
+    if str(_PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(_PROJECT_ROOT))
     from ktc_vis.data.loader import KTCDataLoader
-    from ktc_vis.data.subsampler import subsample_measurement
 
     loader = KTCDataLoader()
     shutil.copy2(_MEASUREMENTS_DIR / "ref.mat", training_dir / "ref.mat")
 
     idx = _SAMPLE_TO_INDEX[sample]
-    m = loader.load(1, sample)
-    if level != 1:
-        m = subsample_measurement(m, level)
+    m = loader.load(level, sample)
     scipy.io.savemat(
         str(training_dir / f"data{idx}.mat"),
         {
@@ -120,13 +117,16 @@ def main() -> None:
     parser.add_argument("--no-cache-update", action="store_true",
                         help="Measure timing but do not write to the HDF5 cache.")
     args = parser.parse_args()
+    if args.swap and not args.memory:
+        parser.error("--swap requires --memory "
+                     "(Docker only accepts --memory-swap together with --memory).")
 
     print(f"CUQI8 runtime benchmark — image: {_IMAGE}")
     print(f"Cache:  {_CACHE_PATH}")
     mem_info = args.memory or "unlimited (Docker VM ceiling)"
     swap_info = f"  |  swap ceiling: {args.swap}" if args.swap else ""
     print(f"Memory: {mem_info} per container  |  shm: 512m{swap_info}")
-    print(f"Mode:   per-sample (one container per sample to minimise peak RAM)")
+    print("Mode:   per-sample (one container per sample to minimise peak RAM)")
     print("─" * 60)
 
     bench_start = time.perf_counter()
