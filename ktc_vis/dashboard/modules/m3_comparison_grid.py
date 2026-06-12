@@ -583,6 +583,7 @@ def _voltage_figure(measurement) -> go.Figure:
 # ── Metrics scorecard ──────────────────────────────────────────────────────────
 
 # (metric_key, display_label, higher_is_better, format_spec)
+# Exactly the 14 metrics from the README "14 Metrics Engine" table.
 _METRIC_KEYS: list[tuple[str, str, bool, str]] = [
     # Image Quality
     ("ssim",                   "SSIM Score",           True,  ".3f"),
@@ -597,10 +598,6 @@ _METRIC_KEYS: list[tuple[str, str, bool, str]] = [
     ("iou_water",              "IoU Water",            True,  ".3f"),
     ("iou_resistive",          "IoU Resistive",        True,  ".3f"),
     ("iou_conductive",         "IoU Conductive",       True,  ".3f"),
-    ("dice_mean",              "Mean Dice",            True,  ".3f"),
-    ("dice_water",             "Dice Water",           True,  ".3f"),
-    ("dice_resistive",         "Dice Resistive",       True,  ".3f"),
-    ("dice_conductive",        "Dice Conductive",      True,  ".3f"),
     # Data Efficiency
     ("runtime",                "Runtime (s)",          False, ".4f"),
     # Measurement Domain
@@ -614,8 +611,8 @@ _METRIC_SECTIONS: dict[int, str] = {
     0:  "Image Quality",
     2:  "Shape Matching",
     5:  "Class Specific",
-    14: "Data Efficiency",
-    15: "Measurement Domain",
+    10: "Data Efficiency",
+    11: "Measurement Domain",
 }
 
 _EXPECTED_METRIC_KEYS: set[str] = {key for key, *_ in _METRIC_KEYS}
