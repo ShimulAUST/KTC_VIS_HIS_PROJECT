@@ -55,6 +55,7 @@ _VOLTAGE_POLAR_ID = "m6-voltage-polar"
 _VOLTAGE_DIFF_ID = "m6-voltage-diff"
 _RES_SCATTER_ID = "m6-resistance-scatter"
 _RES_HEATMAP_ID = "m6-resistance-heatmap"
+_RESMAP_MODE_ID = "m6-resmap-mode"
 _INJ_SLIDER_ID = "m6-injection-slider"
 _PLAY_BTN_ID = "m6-play-btn"
 _INTERVAL_ID = "m6-interval"
@@ -83,7 +84,11 @@ def _load_measurement(level: int, sample: str) -> KTCMeasurement:
     return _LOADER.load(level=level, sample=sample)
 
 
-@lru_cache(maxsize=8)
+# Manual cache instead of lru_cache: a missing/corrupt ref.mat must not be
+# cached forever — the user may stage the dataset while the app is running.
+_REF_CACHE: dict[int, KTCMeasurement] = {}
+
+
 def _load_reference(level: int) -> KTCMeasurement | None:
     """Load the empty-tank reference, subsampled exactly like a measurement.
 
@@ -100,6 +105,8 @@ def _load_reference(level: int) -> KTCMeasurement | None:
         Reference :class:`KTCMeasurement`, or ``None`` if ``ref.mat`` is
         missing or malformed.
     """
+    if level in _REF_CACHE:
+        return _REF_CACHE[level]
     if not _REF_MAT.exists():
         return None
     try:
@@ -107,11 +114,15 @@ def _load_reference(level: int) -> KTCMeasurement | None:
         inj = ref["Injref"]
         mpat = ref["Mpat"].astype(np.int16)
         uel = np.asarray(ref["Uelref"], dtype=np.float64).flatten()
-    except Exception:  # pragma: no cover - corrupt file surfaced as overlay-less UI
+    except (KeyError, ValueError, OSError):
         logger.exception("Failed to read %s", _REF_MAT)
         return None
 
     n_inj = inj.shape[1]
+    if n_inj == 0 or uel.size == 0 or uel.size % n_inj != 0:
+        logger.warning("ref.mat has inconsistent shapes: Injref %s, Uelref %s",
+                       inj.shape, uel.shape)
+        return None
     voltage = uel.reshape(n_inj, len(uel) // n_inj)
     current = inj.T
     magnitude = np.abs(current).max(axis=1, keepdims=True)
@@ -128,7 +139,21 @@ def _load_reference(level: int) -> KTCMeasurement | None:
     measurement.__dict__["mpat"] = mpat
     if level != 1:
         measurement = subsample_measurement(measurement, level)
+    _REF_CACHE[level] = measurement
     return measurement
+
+
+def _sanitize(arr: np.ndarray) -> tuple[np.ndarray, bool]:
+    """Replace NaN/Inf with 0 so Plotly never receives non-finite values.
+
+    Returns:
+        Tuple of (cleaned array, True if anything was non-finite).
+    """
+    arr = np.asarray(arr, dtype=np.float64)
+    finite = np.isfinite(arr)
+    if finite.all():
+        return arr, False
+    return np.where(finite, arr, 0.0), True
 
 
 def _electrode_angles(level: int) -> tuple[list[int], list[float]]:
@@ -158,7 +183,10 @@ def _pair_angles(measurement: KTCMeasurement, level: int) -> list[float]:
     active = subsample_electrodes(level)
     angles: list[float] = []
     for c in range(n_cols):
-        rows = np.nonzero(mpat[:, c])[0]
+        rows = [r for r in np.nonzero(mpat[:, c])[0] if r < len(active)]
+        if not rows:
+            angles.append(360.0 * c / max(n_cols, 1))
+            continue
         rad = np.deg2rad([360.0 * active[r] / _N_TANK_ELECTRODES for r in rows])
         mean = np.degrees(np.arctan2(np.sin(rad).mean(), np.cos(rad).mean()))
         angles.append(float(mean % 360))
@@ -223,8 +251,10 @@ def current_polar_figure(
     Source electrode (+) drawn red, sink (−) blue; electrodes removed at
     this level are marked with gray crosses so coverage gaps are visible.
     """
+    if measurement.current_matrix.size == 0:
+        return empty_figure("No current data at this level")
     active, angles = _electrode_angles(level)
-    currents = np.asarray(measurement.current_matrix[inj_idx], dtype=np.float64)
+    currents, _ = _sanitize(measurement.current_matrix[inj_idx])
 
     colors = [DANGER if c > 0 else ACCENT if c < 0 else "rgba(90,90,120,0.25)"
               for c in currents]
@@ -273,8 +303,10 @@ def voltage_polar_figure(
     Each point is one measurement pair, placed at the circular-mean angle
     of its two electrodes. The dashed overlay is the empty-tank reference.
     """
+    if measurement.voltage_matrix.size == 0:
+        return empty_figure("No voltage data at this level")
     angles = _pair_angles(measurement, level)
-    v = np.asarray(measurement.voltage_matrix[inj_idx], dtype=np.float64)
+    v, _ = _sanitize(measurement.voltage_matrix[inj_idx])
 
     order = np.argsort(angles)
     theta = [angles[i] for i in order]
@@ -290,7 +322,7 @@ def voltage_polar_figure(
     ))
     if reference is not None and reference.voltage_matrix.shape == \
             measurement.voltage_matrix.shape:
-        v_ref = np.asarray(reference.voltage_matrix[inj_idx], dtype=np.float64)
+        v_ref, _ = _sanitize(reference.voltage_matrix[inj_idx])
         fig.add_trace(go.Scatterpolar(
             r=v_ref[order],
             theta=theta,
@@ -318,9 +350,11 @@ def voltage_diff_figure(
     if reference is None or reference.voltage_matrix.shape != \
             measurement.voltage_matrix.shape:
         return empty_figure("Empty-tank reference (ref.mat) unavailable")
+    if measurement.voltage_matrix.size == 0:
+        return empty_figure("No voltage data at this level")
 
-    v = np.asarray(measurement.voltage_matrix[inj_idx], dtype=np.float64)
-    v_ref = np.asarray(reference.voltage_matrix[inj_idx], dtype=np.float64)
+    v, _ = _sanitize(measurement.voltage_matrix[inj_idx])
+    v_ref, _ = _sanitize(reference.voltage_matrix[inj_idx])
     delta = v - v_ref
     x = np.arange(1, len(delta) + 1)
     colors = [DANGER if d < 0 else SUCCESS for d in delta]
@@ -342,7 +376,9 @@ def resistance_scatter_figure(
     measurement: KTCMeasurement, inj_idx: int
 ) -> go.Figure:
     """Scatter of R = V/I per measurement pair for the selected injection."""
-    r = np.asarray(measurement.resistance_matrix[inj_idx], dtype=np.float64)
+    if measurement.resistance_matrix.size == 0:
+        return empty_figure("No resistance data at this level")
+    r, _ = _sanitize(measurement.resistance_matrix[inj_idx])
     x = np.arange(1, len(r) + 1)
 
     fig = go.Figure()
@@ -361,40 +397,82 @@ def resistance_scatter_figure(
 
 
 def resistance_heatmap_figure(
-    measurement: KTCMeasurement, inj_idx: int | None = None
+    measurement: KTCMeasurement,
+    inj_idx: int | None = None,
+    mode: str = "buildup",
 ) -> go.Figure:
     """2D resistance map: rows = injections, columns = measurement pairs.
 
     Bright rows/columns are the injection–measurement combinations carrying
-    the most information about the inclusions. The currently selected
-    injection row is outlined.
-    """
-    z = np.asarray(measurement.resistance_matrix, dtype=np.float64)
-    n_inj, n_pairs = z.shape
+    the most information about the inclusions. Three progressive views make
+    the dense matrix digestible:
 
-    fig = go.Figure(go.Heatmap(
-        z=z,
-        x=list(range(1, n_pairs + 1)),
-        y=list(range(1, n_inj + 1)),
-        colorscale="Viridis",
-        colorbar=dict(thickness=10, len=0.85,
-                      tickfont=dict(color="#ccc", size=10),
-                      title=dict(text="R", font=dict(color=MUTED, size=11))),
-        hovertemplate=("injection %{y}<br>pair %{x}<br>"
-                       "R = %{z:.4f}<extra></extra>"),
-    ))
-    layout = _cartesian_layout(
-        "Resistance map · all injections × measurement pairs",
-        "measurement pair", "injection")
-    layout["showlegend"] = False
-    fig.update_layout(**layout)
-    if inj_idx is not None and 0 <= inj_idx < n_inj:
+        ``row``     — only the selected injection's row (one strip).
+        ``buildup`` — rows revealed up to the selected injection, so the
+                      map fills in as the user steps/plays through patterns.
+        ``full``    — the complete matrix, selected row outlined.
+
+    Color limits always come from the full matrix, so colors mean the same
+    thing in every view.
+    """
+    if measurement.resistance_matrix.size == 0:
+        return empty_figure("No resistance data at this level")
+    z, _ = _sanitize(measurement.resistance_matrix)
+    n_inj, n_pairs = z.shape
+    if inj_idx is None:
+        inj_idx = 0
+    inj_idx = max(0, min(int(inj_idx), n_inj - 1))
+    zmin, zmax = float(z.min()), float(z.max())
+
+    colorbar = dict(thickness=10, len=0.85,
+                    tickfont=dict(color="#ccc", size=10),
+                    title=dict(text="R", font=dict(color=MUTED, size=11)))
+    x = list(range(1, n_pairs + 1))
+    hover = "injection %{y}<br>pair %{x}<br>R = %{z:.4f}<extra></extra>"
+
+    if mode == "row":
+        fig = go.Figure(go.Heatmap(
+            z=z[inj_idx:inj_idx + 1],
+            x=x, y=[inj_idx + 1],
+            colorscale="Viridis", zmin=zmin, zmax=zmax,
+            colorbar=colorbar, hovertemplate=hover,
+        ))
+        layout = _cartesian_layout(
+            f"Step 1 · injection {inj_idx + 1} only — one row of the map",
+            "measurement pair", "injection")
+        layout["yaxis"]["tickvals"] = [inj_idx + 1]
+    elif mode == "buildup":
+        z_masked = z.tolist()
+        for r in range(inj_idx + 1, n_inj):
+            z_masked[r] = [None] * n_pairs
+        fig = go.Figure(go.Heatmap(
+            z=z_masked,
+            x=x, y=list(range(1, n_inj + 1)),
+            colorscale="Viridis", zmin=zmin, zmax=zmax,
+            colorbar=colorbar, hovertemplate=hover,
+        ))
+        layout = _cartesian_layout(
+            f"Step 2 · build-up — {inj_idx + 1} of {n_inj} injections shown",
+            "measurement pair", "injection")
+    else:
+        fig = go.Figure(go.Heatmap(
+            z=z,
+            x=x, y=list(range(1, n_inj + 1)),
+            colorscale="Viridis", zmin=zmin, zmax=zmax,
+            colorbar=colorbar, hovertemplate=hover,
+        ))
+        layout = _cartesian_layout(
+            "Step 3 · full map — all injections × measurement pairs",
+            "measurement pair", "injection")
         fig.add_shape(
             type="rect", xref="x", yref="y",
             x0=0.5, x1=n_pairs + 0.5,
             y0=inj_idx + 0.5, y1=inj_idx + 1.5,
             line=dict(color=WARN, width=1.6),
         )
+
+    layout["showlegend"] = False
+    fig.update_layout(**layout)
     return fig
 
 
@@ -442,9 +520,7 @@ def layout() -> html.Div:
                     _panel("Resistance Scatter", "Selected injection",
                            _RES_SCATTER_ID, badge="R", badge_color=WARN,
                            height=360),
-                    _panel("Resistance Map", "All injections × pairs · "
-                           "selected row outlined", _RES_HEATMAP_ID,
-                           badge="R²ᴰ", badge_color="#a07bff", height=360),
+                    _resmap_panel(height=360),
                 ],
                 style=_grid(420),
             ),
@@ -705,6 +781,99 @@ def _panel(
     )
 
 
+def _resmap_panel(height: int = 360) -> html.Div:
+    """Resistance-map panel with a 3-step view selector and reading guide."""
+    # header (44) + step bar (~38) + caption (~30) + padding/border (18)
+    card_height = height + 130
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span(
+                                "R²ᴰ",
+                                style={
+                                    "display": "inline-block",
+                                    "padding": "2px 8px",
+                                    "borderRadius": "6px",
+                                    "backgroundColor": "#a07bff",
+                                    "color": "#fff",
+                                    "fontSize": "10px",
+                                    "fontWeight": 700,
+                                    "letterSpacing": "0.4px",
+                                    "marginRight": "10px",
+                                },
+                            ),
+                            html.Span(
+                                "Resistance Map",
+                                style={"color": TEXT, "fontWeight": 600,
+                                       "fontSize": "13.5px"},
+                            ),
+                        ]
+                    ),
+                    html.Span(
+                        "Understand it in 3 steps",
+                        style={"color": MUTED, "fontSize": "11.5px"},
+                    ),
+                ],
+                style=_PANEL_HEADER_STYLE,
+            ),
+            html.Div(
+                dcc.RadioItems(
+                    id=_RESMAP_MODE_ID,
+                    options=[
+                        {"label": "1 · This injection", "value": "row"},
+                        {"label": "2 · Build-up", "value": "buildup"},
+                        {"label": "3 · Full map", "value": "full"},
+                    ],
+                    value="buildup",
+                    inline=True,
+                    inputStyle={"marginRight": "4px"},
+                    labelStyle={
+                        "color": TEXT,
+                        "marginRight": "16px",
+                        "fontSize": "12px",
+                        "fontWeight": 500,
+                        "cursor": "pointer",
+                    },
+                ),
+                style={"padding": "8px 14px 0"},
+            ),
+            html.Div(
+                dcc.Graph(
+                    id=_RES_HEATMAP_ID,
+                    figure=empty_figure("Loading…"),
+                    config={"displayModeBar": False, "responsive": True},
+                    style={"height": f"{height}px", "width": "100%"},
+                ),
+                style={
+                    "padding": "6px 6px 0",
+                    "flex": "1",
+                    "minHeight": "0",
+                    "overflow": "hidden",
+                },
+            ),
+            html.Div(
+                "How to read: each row is one injection pattern, each column "
+                "one electrode measurement pair, color is R = V/I. Start with "
+                "step 1 (the row of the injection selected above), press "
+                "▶ Play with step 2 to watch the map fill in row by row, then "
+                "switch to step 3 to see the whole picture.",
+                style={"color": MUTED, "fontSize": "11px", "lineHeight": "1.45",
+                       "padding": "6px 14px 10px"},
+            ),
+        ],
+        style={
+            **CARD_STYLE,
+            "height": f"{card_height}px",
+            "display": "flex",
+            "flexDirection": "column",
+            "overflow": "hidden",
+        },
+    )
+
+
 def _banner(message: str, kind: str = "info") -> html.Div:
     palette = {
         "info": ("#1f3a5f", "#5b8def", "#cfe0ff"),
@@ -781,10 +950,11 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         Input(_INJ_SLIDER_ID, "value"),
         Input("sidebar-level-slider", "value"),
         Input("sidebar-sample-radio", "value"),
+        Input(_RESMAP_MODE_ID, "value"),
     )
-    def update_panels(inj_idx, level, sample):  # noqa: ANN001, ANN202
-        level = int(level)
+    def update_panels(inj_idx, level, sample, resmap_mode):  # noqa: ANN001, ANN202
         try:
+            level = int(level)
             measurement = _load_measurement(level, sample)
         except FileNotFoundError as exc:
             logger.warning("M6 data missing: %s", exc)
@@ -792,6 +962,12 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             chips = [_chip("status", "data missing", accent=DANGER)]
             return (empty, empty, empty, empty, empty, chips,
                     _banner(str(exc), "error"))
+        except (ValueError, TypeError) as exc:
+            logger.warning("M6 invalid selection: %s", exc)
+            empty = empty_figure("Invalid selection")
+            chips = [_chip("status", "invalid selection", accent=DANGER)]
+            return (empty, empty, empty, empty, empty, chips,
+                    _banner(f"Invalid selection: {exc}", "error"))
         except Exception as exc:  # pragma: no cover - surfaced to the UI
             logger.exception("M6 update failed")
             empty = empty_figure("Error")
@@ -801,13 +977,27 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
         reference = _load_reference(level)
         n_inj, n_el = measurement.current_matrix.shape
-        inj_idx = min(int(inj_idx or 0), n_inj - 1)
+        try:
+            inj_idx = int(inj_idx)
+        except (TypeError, ValueError):
+            inj_idx = 0
+        inj_idx = max(0, min(inj_idx, max(n_inj - 1, 0)))
 
-        current_fig = current_polar_figure(measurement, level, inj_idx)
-        vpolar_fig = voltage_polar_figure(measurement, reference, level, inj_idx)
-        vdiff_fig = voltage_diff_figure(measurement, reference, inj_idx)
-        rscatter_fig = resistance_scatter_figure(measurement, inj_idx)
-        rheat_fig = resistance_heatmap_figure(measurement, inj_idx)
+        def _safe(builder, *fargs):  # noqa: ANN001, ANN202
+            # One broken panel must not blank the other four.
+            try:
+                return builder(*fargs)
+            except Exception:  # pragma: no cover - surfaced to the UI
+                logger.exception("M6 %s failed", builder.__name__)
+                return empty_figure("Panel error — see logs")
+
+        current_fig = _safe(current_polar_figure, measurement, level, inj_idx)
+        vpolar_fig = _safe(voltage_polar_figure, measurement, reference,
+                           level, inj_idx)
+        vdiff_fig = _safe(voltage_diff_figure, measurement, reference, inj_idx)
+        rscatter_fig = _safe(resistance_scatter_figure, measurement, inj_idx)
+        rheat_fig = _safe(resistance_heatmap_figure, measurement, inj_idx,
+                          resmap_mode or "buildup")
 
         n_meas = measurement.voltage_matrix.size
         chips = [
@@ -827,5 +1017,12 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             banner = _banner(
                 "Empty-tank reference (measurements/ref.mat) not found — "
                 "voltage difference panel disabled.", "warn")
+        elif not (np.isfinite(measurement.voltage_matrix).all()
+                  and np.isfinite(measurement.current_matrix).all()
+                  and np.isfinite(measurement.resistance_matrix).all()):
+            banner = _banner(
+                "Measurement contains non-finite values (NaN/Inf) — they "
+                "are shown as 0 in the panels. Check the staged .mat files.",
+                "warn")
         return (current_fig, vpolar_fig, vdiff_fig, rscatter_fig, rheat_fig,
                 chips, banner)
