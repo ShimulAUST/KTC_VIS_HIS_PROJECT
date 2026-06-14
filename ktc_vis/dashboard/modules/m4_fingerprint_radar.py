@@ -152,7 +152,8 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         stats = _build_heatmap(normalised, raw_axis)
         profiles = [_profile_card(alg, normalised[alg], highlighted)
                     for alg in _ALGORITHMS]
-        return fig, stats, profiles, html.Div()
+        info = _meas_info_banner(raw_axis)
+        return fig, stats, profiles, info
 
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
@@ -731,6 +732,21 @@ def _banner(message: str, kind: str = "info") -> html.Div:
         "color": fg, "padding": "10px 14px",
         "borderRadius": "10px", "fontSize": "12.5px",
     })
+
+
+def _meas_info_banner(raw: dict[str, dict[str, float]]) -> html.Div | None:
+    missing = all(
+        np.isnan(raw[alg].get("Voltage Residual", float("nan")))
+        for alg in _ALGORITHMS
+    )
+    if missing:
+        return _banner(
+            "Voltage Residual and Current Sensitivity Balance are not yet cached "
+            "and show 0 on the radar. They will appear once measurement-domain "
+            "metrics are computed by the benchmark runner.",
+            "info",
+        )
+    return None
 
 
 # ── Colour & formatting utilities ─────────────────────────────────────────────
