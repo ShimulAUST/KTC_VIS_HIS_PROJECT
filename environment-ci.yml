@@ -1,0 +1,35 @@
+# Slim environment for GitHub Actions CI only.
+#
+# The full environment.yml (PyTorch, torchvision, JupyterLab, deepinv,
+# torch-geometric) exceeds the ~14 GB disk on GitHub runners and the env
+# install dies with "No space left on device". CI skips the adapter tests
+# (tests/test_adapters.py), so none of the ML stack is needed here —
+# only what ktc_vis/ and tests/ actually import.
+#
+# For local development use environment.yml instead.
+name: ktc-vis
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.10.13
+  - pip
+
+  # ── Dashboard & Visualization ────────────────────────────────
+  - plotly=5.18.0
+  - dash=2.14.2
+  - importlib-metadata  # required by dash at import time; not pulled in by conda
+
+  # ── Scientific Computing ─────────────────────────────────────
+  - numpy=1.26.2
+  - scipy=1.11.4
+  - scikit-image=0.22.0
+  - h5py=3.10.0
+
+  # ── Configuration ────────────────────────────────────────────
+  - pyyaml=6.0.1
+
+  # ── Testing & Code Quality ───────────────────────────────────
+  - pytest=7.4.3
+  - pytest-cov=4.1.0
+  - flake8=6.1.0
