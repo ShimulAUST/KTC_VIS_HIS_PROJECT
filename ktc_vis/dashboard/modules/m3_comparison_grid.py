@@ -73,7 +73,7 @@ _RECON_IDS = {alg: f"m3-recon-{alg}" for alg in _ALGORITHMS}
 _DIFF_PAIRS = [("abc1", "cuqi8"), ("abc1", "pnpe2e"), ("cuqi8", "pnpe2e")]
 _DIFF_IDS = {(a, b): f"m3-diff-{a}-{b}" for a, b in _DIFF_PAIRS}
 # Bottom row
-_VOLTAGE_ID = "m3-voltage-chart"
+_VOLTAGE_BAR_ID  = "m3-voltage-bar"
 _SCORE_ID = "m3-scorecard"
 
 # ── Shared style helpers ───────────────────────────────────────────────────────
@@ -115,10 +115,10 @@ def layout() -> html.Div:
             ),
             _diff_grid(),
 
-            # ── Row 3: voltage chart + metrics scorecard ──────────────────────
+            # ── Row 3: voltage charts + metrics scorecard ─────────────────────
             _section_label(
                 "Measurement Data & Metrics",
-                "Left: measured voltage pattern (rows = injections, cols = channels). "
+                "Left: two voltage charts showing channel signal strength and average pattern. "
                 "Right: per-algorithm quality scores from the benchmark cache.",
             ),
             _bottom_row(),
@@ -238,51 +238,47 @@ def _diff_grid() -> html.Div:
 
 
 def _bottom_row() -> html.Div:
+    def _volt_panel(badge, title, subtitle, graph_id, height=220):
+        return html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div([
+                            html.Span(badge, style={
+                                "display": "inline-block", "padding": "2px 8px",
+                                "borderRadius": "6px", "backgroundColor": "#00b894",
+                                "color": "#fff", "fontSize": "10px",
+                                "fontWeight": 700, "marginRight": "10px",
+                            }),
+                            html.Span(title, style={"color": TEXT, "fontWeight": 600,
+                                                    "fontSize": "13px"}),
+                        ]),
+                        html.Span(subtitle, style={"color": MUTED, "fontSize": "11px"}),
+                    ],
+                    style=_PANEL_HDR,
+                ),
+                html.Div(
+                    dcc.Graph(
+                        id=graph_id,
+                        figure=empty_figure("Loading…"),
+                        config={"displayModeBar": False, "responsive": True},
+                        style={"height": f"{height}px", "width": "100%"},
+                    ),
+                    style={"padding": "6px 6px 8px"},
+                ),
+            ],
+            style={**CARD_STYLE, "display": "flex", "flexDirection": "column"},
+        )
+
     voltage_panel = html.Div(
         [
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Span(
-                                "V",
-                                style={
-                                    "display": "inline-block",
-                                    "padding": "2px 8px",
-                                    "borderRadius": "6px",
-                                    "backgroundColor": "#00b894",
-                                    "color": "#fff",
-                                    "fontSize": "10px",
-                                    "fontWeight": 700,
-                                    "marginRight": "10px",
-                                },
-                            ),
-                            html.Span("Voltage Measurement Pattern",
-                                      style={"color": TEXT, "fontWeight": 600,
-                                             "fontSize": "13.5px"}),
-                        ]
-                    ),
-                    html.Span("rows = injections · cols = measurement channels",
-                              style={"color": MUTED, "fontSize": "11.5px"}),
-                ],
-                style=_PANEL_HDR,
-            ),
-            html.Div(
-                dcc.Graph(
-                    id=_VOLTAGE_ID,
-                    figure=empty_figure("Loading…"),
-                    config={"displayModeBar": False, "responsive": True},
-                    style={"height": "300px", "width": "100%"},
-                ),
-                style={"padding": "6px 6px 10px"},
+            _volt_panel(
+                "◼", "Channel Signal Strength",
+                "How strongly each electrode pair responds — taller bar = closer to the inclusion",
+                _VOLTAGE_BAR_ID, height=460,
             ),
         ],
-        style={
-            **CARD_STYLE,
-            "flex": "2",
-            "display": "flex",
-            "flexDirection": "column",
-        },
+        style={"flex": "2", "display": "flex", "flexDirection": "column", "gap": "10px"},
     )
 
     scorecard_panel = html.Div(
@@ -526,55 +522,59 @@ def _diff_figure(
     return fig
 
 
-def _voltage_figure(measurement) -> go.Figure:
-    """Heatmap of the voltage measurement matrix (injections × channels)."""
-    V = measurement.voltage_matrix  # (n_inj, n_channels)
+def _voltage_bar_figure(measurement) -> go.Figure:
+    """Bar chart: signal strength per channel, sorted strongest → weakest.
 
-    # Normalise each injection row to highlight pattern shape, not magnitude
-    row_max = np.abs(V).max(axis=1, keepdims=True)
-    row_max = np.where(row_max == 0, 1.0, row_max)
-    V_norm = V / row_max
+    Each bar = one measurement channel (electrode pair).
+    Taller bar = that channel is more affected by the inclusion.
+    Colour goes from bright blue (strongest) to dim (weakest).
+    """
+    V = np.asarray(measurement.voltage_matrix, dtype=np.float64)
 
-    n_inj, n_ch = V.shape
-    fig = go.Figure(
-        go.Heatmap(
-            z=V_norm,
-            colorscale="RdBu",
-            zmid=0,
-            showscale=True,
-            colorbar=dict(
-                thickness=8, len=0.8,
-                title=dict(text="norm. V", font=dict(color=MUTED, size=9),
-                           side="right"),
-                tickfont=dict(color=MUTED, size=9),
-            ),
-            hovertemplate=(
-                "inj:%{y}<br>ch:%{x}<br>norm-V:%{z:.3f}<extra></extra>"
-            ),
-        )
-    )
+    V_dev = V - V.mean(axis=1, keepdims=True)
+    ch_rms = np.sqrt(np.mean(V_dev ** 2, axis=0))
+
+    # Sort strongest first
+    order = np.argsort(ch_rms)[::-1]
+    sorted_rms = ch_rms[order]
+    sorted_labels = [f"Ch {i}" for i in order]
+
+    rms_max = sorted_rms.max() if sorted_rms.max() > 0 else 1.0
+    colors = [
+        f"rgba(91,141,239,{0.3 + 0.7 * float(v) / rms_max})"
+        for v in sorted_rms
+    ]
+
+    fig = go.Figure(go.Bar(
+        x=sorted_labels,
+        y=list(sorted_rms),
+        marker=dict(color=colors, line=dict(width=0)),
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Signal strength: %{y:.5f}<br>"
+            "<i>Higher = more affected by the inclusion</i>"
+            "<extra></extra>"
+        ),
+    ))
+
     fig.update_layout(
         paper_bgcolor=CARD,
         plot_bgcolor="#1a1a2e",
-        margin=dict(l=48, r=48, t=36, b=36),
-        title=dict(
-            text=(
-                f"Voltage Matrix · L{measurement.level}/{measurement.sample.upper()} "
-                f"· {n_inj} injections × {n_ch} channels"
-            ),
-            x=0.5, font=dict(color="#ddd", size=11),
-        ),
+        margin=dict(l=52, r=12, t=28, b=48),
         xaxis=dict(
-            title=dict(text="Measurement channel", font=dict(color=MUTED, size=10)),
-            tickfont=dict(color=MUTED, size=9),
+            title=dict(text="Measurement channel (sorted by signal strength)",
+                       font=dict(color=MUTED, size=9)),
+            tickfont=dict(color=MUTED, size=8),
             gridcolor="#2e2e44", zeroline=False,
+            tickangle=-45,
         ),
         yaxis=dict(
-            title=dict(text="Injection pattern", font=dict(color=MUTED, size=10)),
+            title=dict(text="Signal strength (RMS)",
+                       font=dict(color=MUTED, size=9)),
             tickfont=dict(color=MUTED, size=9),
             gridcolor="#2e2e44", zeroline=False,
-            autorange="reversed",
         ),
+        bargap=0.06,
         uirevision="constant",
     )
     return fig
@@ -862,7 +862,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     recon_outputs = [Output(_RECON_IDS[alg], "figure") for alg in _ALGORITHMS]
     diff_outputs = [Output(_DIFF_IDS[pair], "figure") for pair in _DIFF_PAIRS]
     other_outputs = [
-        Output(_VOLTAGE_ID, "figure"),
+        Output(_VOLTAGE_BAR_ID, "figure"),
         Output(_SCORE_ID, "children"),
         Output(_CHIPS_ID, "children"),
         Output(_BANNER_ID, "children"),
@@ -926,9 +926,9 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
         # ── 5. Voltage figure ─────────────────────────────────────────────────
         if measurement is not None:
-            voltage_fig = _voltage_figure(measurement)
+            voltage_bar_fig = _voltage_bar_figure(measurement)
         else:
-            voltage_fig = empty_figure("Measurement data unavailable")
+            voltage_bar_fig = empty_figure("Measurement data unavailable")
 
         # ── 6. Scorecard ──────────────────────────────────────────────────────
         scorecard = _scorecard_children(level, sample, selected_alg)
@@ -963,4 +963,4 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                         )
                     )
 
-        return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
+        return (*recon_figs, *diff_figs, voltage_bar_fig, scorecard, chips, banner)
