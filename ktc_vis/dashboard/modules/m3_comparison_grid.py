@@ -620,6 +620,36 @@ _METRIC_SECTIONS: dict[int, str] = {
 
 _EXPECTED_METRIC_KEYS: set[str] = {key for key, *_ in _METRIC_KEYS}
 
+# Measurement-domain metrics were rewritten to be reconstruction-dependent
+# (Born forward surrogate). Any cached value that still matches the legacy
+# saturated pattern is treated as stale and recomputed.
+_MEASUREMENT_DOMAIN_KEYS: tuple[str, ...] = (
+    "voltage_residual", "resistance_consistency", "current_sensitivity",
+)
+
+
+def _measurement_domain_is_stale(metrics: dict) -> bool:
+    """True if the cached measurement-domain triple looks like an older formula.
+
+    Legacy formula  : voltage_residual >= 0.98, resistance_consistency == 0,
+                      current_sensitivity == 0  (clip-to-zero saturation).
+    First rewrite   : resistance_consistency and current_sensitivity used
+                      ``clip(r, 0, 1)`` so values landed in [0, 1] with many
+                      exact 0.0s. The current version rescales correlations
+                      via ``(r+1)/2`` so no honest cached value should be
+                      < 0.05 unless something is severely wrong.
+    """
+    vr = metrics.get("voltage_residual")
+    rc = metrics.get("resistance_consistency")
+    cs = metrics.get("current_sensitivity")
+    if vr is None or rc is None or cs is None:
+        return True
+    if vr >= 0.98 and abs(rc) < 1e-9 and abs(cs) < 1e-9:
+        return True
+    if rc < 0.05 and cs < 0.05:
+        return True
+    return False
+
 
 def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
     """Return metrics from cache, augmenting any keys missing from older cache entries.
@@ -658,8 +688,12 @@ def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
             )
             return None
 
-    # Cache hit → backfill any missing keys without re-running the adapter
+    # Cache hit → backfill any missing keys without re-running the adapter.
+    # Also drop legacy saturated measurement-domain values so the new
+    # surrogate-based formula overwrites them.
     missing = _EXPECTED_METRIC_KEYS - set(metrics.keys())
+    if _measurement_domain_is_stale(metrics):
+        missing |= set(_MEASUREMENT_DOMAIN_KEYS)
     if missing and reconstruction is not None:
         try:
             measurement = _LOADER.load(level=level, sample=sample)

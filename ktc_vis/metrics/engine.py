@@ -116,10 +116,14 @@ class MetricsEngine:
         position_error = compute_position_error(reconstruction, gt)
         resolution = compute_resolution(reconstruction, gt)
 
-        # Measurement domain
-        voltage_residual = compute_voltage_residual(measurement)
-        resistance_consistency = compute_resistance_consistency(measurement)
-        current_sensitivity = compute_current_sensitivity_balance(measurement)
+        # Measurement domain — surrogate forward model uses the reconstruction
+        voltage_residual = compute_voltage_residual(measurement, reconstruction)
+        resistance_consistency = compute_resistance_consistency(
+            measurement, reconstruction
+        )
+        current_sensitivity = compute_current_sensitivity_balance(
+            measurement, reconstruction
+        )
 
         return {
             "ssim": ssim,
