@@ -34,7 +34,6 @@ from ktc_vis.utils.figures import (
     ERROR_COLORS,
     empty_figure,
     error_overlay_figure,
-    reconstruction_figure,
     segmentation_figure,
 )
 
@@ -432,7 +431,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         ]
 
         gt_fig = segmentation_figure(gt, title="Ground Truth")
-        recon_fig = reconstruction_figure(
+        recon_fig = segmentation_figure(
             recon, title=f"Reconstruction · {algorithm.upper()} · L{level}"
         )
         seg_fig = segmentation_figure(recon, title=f"Segmentation · L{level}")
