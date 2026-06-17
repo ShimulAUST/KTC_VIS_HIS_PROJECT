@@ -8,6 +8,10 @@ import scipy.io
 from dash import Input, Output, State, dcc, html
 from dash.exceptions import PreventUpdate
 
+from ktc_vis.dashboard.theme import (
+    ACCENT, BG, BORDER, CARD, CARD_ALT, CARD_STYLE, DANGER, MUTED, SUCCESS, SURFACE, TEXT, WARN,
+)
+
 # ── Level metadata (KTC2023 electrode / injection protocol per level) ─────────
 _LEVEL_META = {
     1: {"electrodes": 32, "injections": 76, "measurements": 2356},
@@ -42,19 +46,6 @@ _GT_COLORSCALE_3 = [
     [1.00, "#2e7d32"],
 ]
 
-_DARK = "#12121e"
-_PANEL = "#1e1e2f"
-_CARD = "#2a2a3f"
-_TEXT = "#eeeeee"
-_MUTED = "#888888"
-
-# Chip row colors (match M1 theme)
-_CHIP_CARD = {"backgroundColor": "#1e1e2f", "border": "1px solid #2e2e44",
-              "borderRadius": "12px", "boxShadow": "0 1px 2px rgba(0,0,0,0.25)"}
-_WARN = "#f4c870"
-_SUCCESS = "#2ecc71"
-_DANGER = "#e85d75"
-
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 
@@ -67,12 +58,12 @@ def layout() -> html.Div:
             html.Div([
                 html.Span("M2", style={
                     "display": "inline-block", "padding": "2px 10px",
-                    "borderRadius": "999px", "backgroundColor": "#7b61ff",
+                    "borderRadius": "999px", "backgroundColor": ACCENT,
                     "color": "#fff", "fontSize": "11px", "fontWeight": 600,
                     "letterSpacing": "0.5px", "marginRight": "10px",
                 }),
                 html.Span("Difficulty Animator", style={
-                    "color": _TEXT, "fontSize": "20px", "fontWeight": 600,
+                    "color": TEXT, "fontSize": "20px", "fontWeight": 600,
                 }),
             ]),
             html.P(
@@ -82,13 +73,13 @@ def layout() -> html.Div:
                 "quality degrades as measurement data decreases. "
                 "The degradation curves below show how each quality metric evolves across all 7 levels — "
                 "revealing whether an algorithm fails gradually or collapses suddenly.",
-                style={"color": _MUTED, "margin": "8px 0 0", "fontSize": "13px",
+                style={"color": MUTED, "margin": "8px 0 0", "fontSize": "13px",
                        "lineHeight": "1.6"},
             ),
         ], style={
-            "backgroundColor": _PANEL, "borderRadius": "10px",
+            "backgroundColor": CARD, "borderRadius": "10px",
             "padding": "16px 20px", "marginBottom": "16px",
-            "borderLeft": "3px solid #7b61ff",
+            "borderLeft": f"3px solid {ACCENT}",
         }),
 
         # ── Chip row ─────────────────────────────────────────────────────────
@@ -107,12 +98,12 @@ def layout() -> html.Div:
             html.Div([
                 html.Div([
                     html.Span("Difficulty Level", style={
-                        "color": _TEXT, "fontSize": "12px", "fontWeight": 600,
+                        "color": TEXT, "fontSize": "12px", "fontWeight": 600,
                         "marginRight": "10px",
                     }),
                     html.Span(
                         "Drag to jump to any level, or press ▶ Play to animate levels 1 → 7 → 1 in a loop.",
-                        style={"color": _MUTED, "fontSize": "11px"},
+                        style={"color": MUTED, "fontSize": "11px"},
                     ),
                 ], style={"marginBottom": "8px"}),
                 dcc.Slider(
@@ -128,15 +119,15 @@ def layout() -> html.Div:
 
             html.Div([
                 html.Button("▶  Play", id="m2-play-btn", n_clicks=0,
-                            style=_btn_style("#7b61ff")),
+                            style=_btn_style(ACCENT)),
                 html.Div("1.2 s / level", style={
-                    "color": _MUTED, "fontSize": "10px", "textAlign": "center",
+                    "color": MUTED, "fontSize": "10px", "textAlign": "center",
                     "marginTop": "4px",
                 }),
             ], style={"paddingTop": "24px", "textAlign": "center"}),
         ], style={
             "display": "flex", "alignItems": "flex-start",
-            "marginBottom": "20px", "backgroundColor": _PANEL,
+            "marginBottom": "20px", "backgroundColor": CARD,
             "padding": "16px 20px", "borderRadius": "8px",
         }),
 
@@ -219,13 +210,13 @@ def layout() -> html.Div:
         html.Div(
             id="m2-commentary",
             style={
-                "backgroundColor": _PANEL, "borderRadius": "8px",
-                "padding": "16px 20px", "borderLeft": "3px solid #7b61ff",
+                "backgroundColor": CARD, "borderRadius": "8px",
+                "padding": "16px 20px", "borderLeft": f"3px solid {ACCENT}",
                 "minHeight": "60px",
             },
         ),
 
-    ], style={"padding": "20px", "backgroundColor": _DARK, "minHeight": "100vh"})
+    ], style={"padding": "20px", "backgroundColor": BG, "minHeight": "100vh"})
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -234,15 +225,15 @@ def _chip(label: str, value: str, accent: str | None = None) -> html.Div:
     return html.Div(
         [
             html.Span(label, style={
-                "color": _MUTED, "fontSize": "10.5px", "letterSpacing": "0.6px",
+                "color": MUTED, "fontSize": "10.5px", "letterSpacing": "0.6px",
                 "textTransform": "uppercase", "marginRight": "8px",
             }),
             html.Span(value, style={
-                "color": accent or _TEXT, "fontSize": "13px",
+                "color": accent or TEXT, "fontSize": "13px",
                 "fontWeight": 600, "fontVariantNumeric": "tabular-nums",
             }),
         ],
-        style={**_CHIP_CARD, "padding": "8px 12px",
+        style={**CARD_STYLE, "padding": "8px 12px",
                "display": "inline-flex", "alignItems": "center"},
     )
 
@@ -250,15 +241,15 @@ def _chip(label: str, value: str, accent: str | None = None) -> html.Div:
 def _section_label(title: str, subtitle: str) -> html.Div:
     return html.Div([
         html.Span(title, style={
-            "color": _TEXT, "fontWeight": 600, "fontSize": "12px",
+            "color": TEXT, "fontWeight": 600, "fontSize": "12px",
             "letterSpacing": "0.8px", "textTransform": "uppercase",
             "marginRight": "10px",
         }),
-        html.Span(subtitle, style={"color": _MUTED, "fontSize": "12px"}),
+        html.Span(subtitle, style={"color": MUTED, "fontSize": "12px"}),
     ], style={
         "display": "flex", "alignItems": "baseline",
         "padding": "4px 2px 0", "marginBottom": "10px",
-        "borderBottom": "1px dashed #2e2e44", "paddingBottom": "6px",
+        "borderBottom": f"1px dashed {BORDER}", "paddingBottom": "6px",
     })
 
 
@@ -272,24 +263,24 @@ def _btn_style(color: str) -> dict:
 
 def _image_card(title: str, graph_id: str, subtitle: str) -> html.Div:
     return html.Div([
-        html.Div(title, style={"color": _TEXT, "fontWeight": "bold",
+        html.Div(title, style={"color": TEXT, "fontWeight": "bold",
                                "fontSize": "13px", "marginBottom": "2px"}),
-        html.Div(subtitle, style={"color": _MUTED, "fontSize": "10px",
+        html.Div(subtitle, style={"color": MUTED, "fontSize": "10px",
                                   "marginBottom": "6px"}),
         dcc.Graph(id=graph_id, config={"displayModeBar": False},
                   style={"height": "260px"}),
-    ], style={"flex": "1", "backgroundColor": _CARD, "borderRadius": "8px",
+    ], style={"flex": "1", "backgroundColor": CARD_ALT, "borderRadius": "8px",
               "padding": "12px"})
 
 
 def _curve_card(title: str, graph_id: str, description: str = "") -> html.Div:
     children = [
-        html.Div(title, style={"color": _TEXT, "fontWeight": "bold",
+        html.Div(title, style={"color": TEXT, "fontWeight": "bold",
                                "fontSize": "12px", "marginBottom": "2px"}),
     ]
     if description:
         children.append(html.Div(description, style={
-            "color": _MUTED, "fontSize": "10px", "lineHeight": "1.4",
+            "color": MUTED, "fontSize": "10px", "lineHeight": "1.4",
             "marginBottom": "6px",
         }))
     else:
@@ -299,7 +290,7 @@ def _curve_card(title: str, graph_id: str, description: str = "") -> html.Div:
                   style={"height": "160px"}),
     )
     return html.Div(children, style={
-        "flex": "1", "backgroundColor": _CARD, "borderRadius": "8px", "padding": "12px",
+        "flex": "1", "backgroundColor": CARD_ALT, "borderRadius": "8px", "padding": "12px",
     })
 
 
@@ -332,11 +323,11 @@ def _placeholder_figure(message: str) -> go.Figure:
 def _empty_figure(message: str = "") -> go.Figure:
     fig = go.Figure()
     fig.update_layout(
-        paper_bgcolor=_CARD, plot_bgcolor=_CARD,
+        paper_bgcolor=CARD_ALT, plot_bgcolor=CARD_ALT,
         xaxis={"visible": False}, yaxis={"visible": False},
         margin={"l": 0, "r": 0, "t": 0, "b": 0},
         annotations=[{"text": message, "showarrow": False,
-                      "font": {"color": _MUTED, "size": 12},
+                      "font": {"color": MUTED, "size": 12},
                       "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5}],
     )
     return fig
@@ -344,9 +335,9 @@ def _empty_figure(message: str = "") -> go.Figure:
 
 def _image_layout(title: str) -> dict:
     return {
-        "paper_bgcolor": _CARD, "plot_bgcolor": _CARD,
+        "paper_bgcolor": CARD_ALT, "plot_bgcolor": CARD_ALT,
         "margin": {"l": 0, "r": 0, "t": 24, "b": 0},
-        "title": {"text": title, "font": {"color": _MUTED, "size": 11}, "x": 0.5,
+        "title": {"text": title, "font": {"color": MUTED, "size": 11}, "x": 0.5,
                   "pad": {"t": 4}},
         "xaxis": {"visible": False, "scaleanchor": "y"},
         "yaxis": {"visible": False, "autorange": "reversed"},
@@ -389,8 +380,8 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
     if values is not None:
         fig.add_trace(go.Scatter(
             x=LEVELS, y=values, mode="lines+markers",
-            line={"color": "#7b61ff", "width": 2},
-            marker={"size": 7, "color": "#7b61ff"},
+            line={"color": ACCENT, "width": 2},
+            marker={"size": 7, "color": ACCENT},
             name=algorithm.upper(),
         ))
         # Highlight current level with a vertical dashed line
@@ -403,12 +394,12 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
                if metric == "runtime"
                else "Run scripts/run_benchmark.py to populate")
         annotation = [{"text": msg, "showarrow": False,
-                       "font": {"color": _MUTED, "size": 10},
+                       "font": {"color": MUTED, "size": 10},
                        "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5}]
 
     yaxis_cfg = {
-        "tickfont": {"color": _MUTED, "size": 9},
-        "gridcolor": "#2a2a3f",
+        "tickfont": {"color": MUTED, "size": 9},
+        "gridcolor": CARD_ALT,
         "zeroline": False,
     }
     if metric in _FIXED_Y_RANGE:
@@ -417,15 +408,15 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
         yaxis_cfg["autorange"] = False
 
     fig.update_layout(
-        paper_bgcolor=_CARD, plot_bgcolor="#1a1a2e",
+        paper_bgcolor=CARD_ALT, plot_bgcolor=SURFACE,
         margin={"l": 36, "r": 8, "t": 8, "b": 36},
         xaxis={
             "range": [0.5, 7.5],
             "tickvals": LEVELS,
             "ticktext": [str(lv) for lv in LEVELS],
-            "title": {"text": "Level", "font": {"color": _MUTED, "size": 10}},
-            "tickfont": {"color": _MUTED, "size": 9},
-            "gridcolor": "#2a2a3f",
+            "title": {"text": "Level", "font": {"color": MUTED, "size": 10}},
+            "tickfont": {"color": MUTED, "size": 9},
+            "gridcolor": CARD_ALT,
             "zeroline": False,
         },
         yaxis=yaxis_cfg,
@@ -456,33 +447,33 @@ def _curve_figure_from_values(
     if values is not None:
         fig.add_trace(go.Scatter(
             x=LEVELS, y=values, mode="lines+markers",
-            line={"color": "#7b61ff", "width": 2},
-            marker={"size": 7, "color": "#7b61ff"},
+            line={"color": ACCENT, "width": 2},
+            marker={"size": 7, "color": ACCENT},
             name=algorithm.upper(),
         ))
         fig.add_vline(x=current_level,
                       line={"color": "#ffb300", "width": 1.5, "dash": "dash"})
     else:
         annotation = [{"text": "Run scripts/run_benchmark.py to populate",
-                       "showarrow": False, "font": {"color": _MUTED, "size": 10},
+                       "showarrow": False, "font": {"color": MUTED, "size": 10},
                        "xref": "paper", "yref": "paper", "x": 0.5, "y": 0.5}]
 
-    yaxis_cfg = {"tickfont": {"color": _MUTED, "size": 9},
-                 "gridcolor": "#2a2a3f", "zeroline": False}
+    yaxis_cfg = {"tickfont": {"color": MUTED, "size": 9},
+                 "gridcolor": CARD_ALT, "zeroline": False}
     if metric and metric in _FIXED_Y_RANGE:
         lo, hi = _FIXED_Y_RANGE[metric]
         yaxis_cfg["range"] = [lo, hi]
         yaxis_cfg["autorange"] = False
 
     fig.update_layout(
-        paper_bgcolor=_CARD, plot_bgcolor="#1a1a2e",
+        paper_bgcolor=CARD_ALT, plot_bgcolor=SURFACE,
         margin={"l": 36, "r": 8, "t": 8, "b": 36},
         xaxis={
             "range": [0.5, 7.5], "tickvals": LEVELS,
             "ticktext": [str(lv) for lv in LEVELS],
-            "title": {"text": "Level", "font": {"color": _MUTED, "size": 10}},
-            "tickfont": {"color": _MUTED, "size": 9},
-            "gridcolor": "#2a2a3f", "zeroline": False,
+            "title": {"text": "Level", "font": {"color": MUTED, "size": 10}},
+            "tickfont": {"color": MUTED, "size": 9},
+            "gridcolor": CARD_ALT, "zeroline": False,
         },
         yaxis=yaxis_cfg,
         annotations=annotation, showlegend=False, height=160,
@@ -634,12 +625,12 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
 
     # ── Section 1: Hardware context ───────────────────────────────────────────
     context_parts = [
-        _badge(f"Level {level}", "#7b61ff"),
+        _badge(f"Level {level}", ACCENT),
         html.Span(
             f"{meta['electrodes']} electrodes · {meta['injections']} injections · "
             f"{meta['measurements']} measurements "
             f"({data_ratio * 100:.0f}% of Level 1 data)",
-            style={"color": _TEXT, "fontSize": "13px"},
+            style={"color": TEXT, "fontSize": "13px"},
         ),
     ]
     if prev_meta:
@@ -647,7 +638,7 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
         meas_lost = prev_meta["measurements"] - meta["measurements"]
         context_parts.append(html.Span(
             f"  ·  {elec_lost} fewer electrode(s), {meas_lost} fewer measurements than Level {level - 1}",
-            style={"color": _MUTED, "fontSize": "12px"},
+            style={"color": MUTED, "fontSize": "12px"},
         ))
 
     rows = [
@@ -665,7 +656,7 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
         rows.append(html.Div(
             "Benchmark cache not yet available for this combination — "
             "run scripts/run_benchmark.py to see metric commentary.",
-            style={"color": _MUTED, "fontSize": "12px", "fontStyle": "italic"},
+            style={"color": MUTED, "fontSize": "12px", "fontStyle": "italic"},
         ))
         return rows
 
@@ -676,7 +667,7 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if ssim_vals and idx < len(ssim_vals):
         v = ssim_vals[idx]
         label, color = _ssim_label(v)
-        line = [_badge(label, color), html.Span(f"SSIM = {v:.3f}", style={"color": _TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(f"SSIM = {v:.3f}", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - ssim_vals[prev_idx]
             pct = delta / ssim_vals[prev_idx] * 100 if ssim_vals[prev_idx] != 0 else 0
@@ -689,7 +680,7 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if iou_vals and idx < len(iou_vals):
         v = iou_vals[idx]
         label, color = _iou_label(v)
-        line = [_badge(label, color), html.Span(f"Mean IoU = {v:.3f}", style={"color": _TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(f"Mean IoU = {v:.3f}", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - iou_vals[prev_idx]
             pct = delta / iou_vals[prev_idx] * 100 if iou_vals[prev_idx] != 0 else 0
@@ -702,7 +693,7 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if hd_vals and idx < len(hd_vals):
         v = hd_vals[idx]
         label, color = _hausdorff_label(v)
-        line = [_badge(label, color), html.Span(f"Hausdorff = {v:.1f} px", style={"color": _TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(f"Hausdorff = {v:.1f} px", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - hd_vals[prev_idx]
             pct = delta / hd_vals[prev_idx] * 100 if hd_vals[prev_idx] != 0 else 0
@@ -715,7 +706,7 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if pe_vals and idx < len(pe_vals):
         v = pe_vals[idx]
         label, color = _poserr_label(v)
-        line = [_badge(label, color), html.Span(f"Position error = {v:.1f} px", style={"color": _TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(f"Position error = {v:.1f} px", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - pe_vals[prev_idx]
             pct = delta / pe_vals[prev_idx] * 100 if pe_vals[prev_idx] != 0 else 0
@@ -728,7 +719,7 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if res_vals and idx < len(res_vals):
         v = res_vals[idx]
         label, color = _resolution_label(v)
-        line = [_badge(label, color), html.Span(f"Resolution = {v:.0f} px", style={"color": _TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(f"Resolution = {v:.0f} px", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - res_vals[prev_idx]
             pct = delta / res_vals[prev_idx] * 100 if res_vals[prev_idx] != 0 else 0
@@ -745,8 +736,8 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     summary = _summary_sentence(level, algorithm, ssim_vals, iou_vals, hd_vals)
     if summary:
         rows.append(html.Div(summary, style={
-            "color": _MUTED, "fontSize": "12px", "fontStyle": "italic",
-            "borderTop": "1px solid #2a2a3f", "paddingTop": "8px",
+            "color": MUTED, "fontSize": "12px", "fontStyle": "italic",
+            "borderTop": f"1px solid {CARD_ALT}", "paddingTop": "8px",
         }))
 
     return rows
@@ -886,7 +877,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         meta = _LEVEL_META[level]
         chips = [
             _chip("algorithm", algorithm.upper(), accent="#cfe0ff"),
-            _chip("level", f"L{level}", accent=_WARN),
+            _chip("level", f"L{level}", accent=WARN),
             _chip("sample", sample.upper(), accent="#cfe0ff"),
             _chip("electrodes", str(meta["electrodes"])),
             _chip("injections", str(meta["injections"])),
@@ -903,24 +894,24 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             agreement = float((recon == gt).mean()) * 100.0
             chips.append(_chip(
                 "pixel agreement", f"{agreement:.1f}%",
-                accent=_SUCCESS if agreement >= 90 else _WARN,
+                accent=SUCCESS if agreement >= 90 else WARN,
             ))
 
             pos_err = metrics.get("position_error")
             if pos_err is not None:
-                accent = _SUCCESS if pos_err <= 10 else (_WARN if pos_err <= 25 else _DANGER)
+                accent = SUCCESS if pos_err <= 10 else (WARN if pos_err <= 25 else DANGER)
                 chips.append(_chip("position err", f"{pos_err:.1f} px", accent=accent))
 
             resolution = metrics.get("resolution")
             if resolution is not None:
-                accent = _SUCCESS if resolution <= 30 else (_WARN if resolution <= 60 else _DANGER)
+                accent = SUCCESS if resolution <= 30 else (WARN if resolution <= 60 else DANGER)
                 chips.append(_chip("resolution", f"{resolution:.0f} px", accent=accent))
 
             runtime = metrics.get("runtime")
             if runtime is not None and runtime >= _RUNTIME_REAL_THRESHOLD_S:
                 chips.append(_chip("runtime", f"{runtime:.2f} s"))
         except Exception:
-            chips.append(_chip("pixel agreement", "n/a", accent=_MUTED))
+            chips.append(_chip("pixel agreement", "n/a", accent=MUTED))
 
         return chips
 
@@ -938,25 +929,25 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
         if level == 1:
             description = "Full measurement protocol — maximum data, best expected reconstruction quality."
-            bar_color = _SUCCESS
+            bar_color = SUCCESS
         elif level <= 3:
             description = f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements than Level 1. Mild data reduction — most algorithms still perform well."
             bar_color = "#4caf50"
         elif level <= 5:
             description = f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements. Moderate data loss — inverse problem becomes under-determined. Quality starts to drop."
-            bar_color = _WARN
+            bar_color = WARN
         else:
             description = f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements. Severe data loss — only {meas_pct:.0f}% of Level 1 data remains. Most algorithms degrade significantly."
-            bar_color = _DANGER
+            bar_color = DANGER
 
         bar_width = meas_pct
 
         return html.Div([
             html.Div([
                 html.Span(f"Level {level} data availability: {meas_pct:.0f}% of Level 1",
-                          style={"color": _TEXT, "fontSize": "12px", "fontWeight": 600}),
+                          style={"color": TEXT, "fontSize": "12px", "fontWeight": 600}),
                 html.Span(f"  ·  {meta['electrodes']} electrodes, {meta['measurements']:,} measurements",
-                          style={"color": _MUTED, "fontSize": "11px"}),
+                          style={"color": MUTED, "fontSize": "11px"}),
             ], style={"marginBottom": "6px", "display": "flex", "alignItems": "baseline", "gap": "4px"}),
             # Progress bar
             html.Div([
@@ -966,12 +957,12 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     "transition": "width 0.4s ease, background-color 0.4s ease",
                 }),
             ], style={
-                "width": "100%", "height": "6px", "backgroundColor": "#2a2a3f",
+                "width": "100%", "height": "6px", "backgroundColor": CARD_ALT,
                 "borderRadius": "3px", "marginBottom": "6px",
             }),
-            html.Div(description, style={"color": _MUTED, "fontSize": "11px",
+            html.Div(description, style={"color": MUTED, "fontSize": "11px",
                                          "fontStyle": "italic"}),
         ], style={
-            "backgroundColor": _PANEL, "borderRadius": "8px",
-            "padding": "10px 14px", "border": "1px solid #2e2e44",
+            "backgroundColor": CARD, "borderRadius": "8px",
+            "padding": "10px 14px", "border": f"1px solid {BORDER}",
         })
