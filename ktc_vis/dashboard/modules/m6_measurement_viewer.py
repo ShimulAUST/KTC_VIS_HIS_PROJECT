@@ -1006,7 +1006,7 @@ def _header() -> html.Div:
                     "marginTop": "10px",
                     "padding": "7px 12px",
                     "backgroundColor": "#1f2a3f",
-                    "border": f"1px solid #3a4a6a",
+                    "border": "1px solid #3a4a6a",
                     "borderRadius": "8px",
                     "color": "#8ab4f8",
                     "fontSize": "11.5px",
