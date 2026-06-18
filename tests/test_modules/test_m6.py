@@ -25,7 +25,7 @@ def test_register_callbacks():
     callback_ids = " ".join(app.callback_map.keys())
     for component_id in (
         "m6-current-polar", "m6-voltage-polar", "m6-voltage-diff",
-        "m6-resistance-scatter", "m6-resistance-heatmap",
+        "m6-resistance-bar", "m6-coverage-polar",
         "m6-injection-slider", "m6-interval",
     ):
         assert component_id in callback_ids
@@ -43,8 +43,8 @@ def test_figures_are_valid_for_edge_levels(level):
             m6.current_polar_figure(measurement, level, inj_idx),
             m6.voltage_polar_figure(measurement, reference, level, inj_idx),
             m6.voltage_diff_figure(measurement, reference, inj_idx),
-            m6.resistance_scatter_figure(measurement, inj_idx),
-            m6.resistance_heatmap_figure(measurement, inj_idx),
+            m6.resistance_bar_figure(measurement, inj_idx),
+            m6.coverage_polar_figure(measurement, level, inj_idx),
         ):
             assert isinstance(fig, go.Figure)
             assert len(fig.data) >= 1
@@ -74,21 +74,13 @@ def test_voltage_diff_without_reference_returns_placeholder():
 
 
 @requires_data
-@pytest.mark.parametrize("mode", ["row", "buildup", "full"])
-def test_resistance_heatmap_modes(mode):
+def test_resistance_bar_figure_has_correct_pairs():
     m = m6._load_measurement(1, "a")
-    n_inj, n_pairs = m.resistance_matrix.shape
-    fig = m6.resistance_heatmap_figure(m, 5, mode)
+    n_pairs = m.resistance_matrix.shape[1]
+    fig = m6.resistance_bar_figure(m, 0)
     assert isinstance(fig, go.Figure)
-    z = fig.data[0].z
-    if mode == "row":
-        assert len(z) == 1
-    else:
-        assert len(z) == n_inj
-        if mode == "buildup":
-            # Rows beyond the selected injection are masked (None).
-            assert all(v is None for v in z[6])
-            assert not any(v is None for v in z[5])
+    assert len(fig.data) >= 1
+    assert len(fig.data[0].x) == n_pairs
 
 
 @requires_data
@@ -108,9 +100,7 @@ def test_figures_survive_nonfinite_values():
 
     for fig in (
         m6.voltage_polar_figure(bad, None, 1, 0),
-        m6.resistance_scatter_figure(bad, 0),
-        # "full" mode: build-up intentionally masks rows with None.
-        m6.resistance_heatmap_figure(bad, 0, "full"),
+        m6.resistance_bar_figure(bad, 0),
     ):
         assert isinstance(fig, go.Figure)
         for trace in fig.data:
@@ -136,8 +126,7 @@ def test_empty_measurement_returns_placeholder():
     for fig in (
         m6.current_polar_figure(empty, 1, 0),
         m6.voltage_polar_figure(empty, None, 1, 0),
-        m6.resistance_scatter_figure(empty, 0),
-        m6.resistance_heatmap_figure(empty, 0),
+        m6.resistance_bar_figure(empty, 0),
     ):
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 0  # placeholder annotation only
