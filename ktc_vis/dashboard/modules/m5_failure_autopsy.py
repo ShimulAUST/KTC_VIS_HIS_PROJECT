@@ -23,6 +23,11 @@ import scipy.io
 from dash import ALL, Input, Output, State, ctx, dcc, html, no_update
 
 from ktc_vis.cache.hdf5_store import CacheMiss, load_result
+from ktc_vis.dashboard.components.glossary import (
+    glossary_term,
+    info_pill,
+    with_tooltip,
+)
 from ktc_vis.data.loader import KTCDataLoader
 from ktc_vis.data.subsampler import subsample_electrodes
 from ktc_vis.dashboard.theme import (
@@ -1167,7 +1172,7 @@ def _chip(label: str, value: str, accent: str | None = None) -> html.Div:
     return html.Div(
         [
             html.Span(
-                label,
+                glossary_term(label, label.upper()),
                 style={
                     "color": MUTED, "fontSize": "10.5px", "letterSpacing": "0.6px",
                     "textTransform": "uppercase", "marginRight": "8px",
@@ -1227,24 +1232,32 @@ def _badge(code: str | None) -> html.Div:
 
     return html.Div(
         [
-            html.Span(
+            with_tooltip(
+                html.Span(
+                    code_display,
+                    style={
+                        "display": "inline-flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "width": "42px", "height": "42px",
+                        "borderRadius": "12px",
+                        "backgroundColor": meta["color"],
+                        "color": "#111" if meta["color"] == WARN else "#fff",
+                        "fontWeight": 800, "fontSize": "20px",
+                        "marginRight": "12px",
+                    },
+                ),
                 code_display,
-                style={
-                    "display": "inline-flex",
-                    "alignItems": "center",
-                    "justifyContent": "center",
-                    "width": "42px", "height": "42px",
-                    "borderRadius": "12px",
-                    "backgroundColor": meta["color"],
-                    "color": "#111" if meta["color"] == WARN else "#fff",
-                    "fontWeight": 800, "fontSize": "20px",
-                    "marginRight": "12px",
-                },
             ),
             html.Div(
                 [
                     html.Div(
-                        f"Failure Type {code_display} · {meta['name']}",
+                        [
+                            html.Span("Failure Type "),
+                            glossary_term(code_display, code_display),
+                            html.Span(f" · {meta['name']}"),
+                            info_pill("failure type"),
+                        ],
                         style={"color": TEXT, "fontWeight": 700, "fontSize": "14px"},
                     ),
                     html.Div(
@@ -1397,8 +1410,11 @@ def _quick_metrics_view(metrics: dict) -> html.Div:
     for label, value, tmpl, hint in items:
         cells.append(html.Div(
             [
-                html.Div(label, style={"color": MUTED, "fontSize": "10.5px",
-                                       "letterSpacing": "0.3px"}),
+                html.Div(
+                    glossary_term(label, label),
+                    style={"color": MUTED, "fontSize": "10.5px",
+                           "letterSpacing": "0.3px"},
+                ),
                 html.Div(
                     _fmt(value, tmpl),
                     style={"color": TEXT, "fontSize": "14px", "fontWeight": 700,
@@ -1454,7 +1470,7 @@ def _signal_breakdown_view(
         rows.append(html.Div(
             [
                 html.Span(
-                    code,
+                    glossary_term(code, code),
                     style={
                         "display": "inline-block",
                         "width": "22px",
