@@ -112,6 +112,10 @@ _SPATIAL_SSIM_ID = "m5-spatial-ssim"
 _CONFUSION_ID = "m5-confusion"
 _BOUNDARY_ID = "m5-boundary"
 _MEAS_ID = "m5-measurement-residual"
+_SPATIAL_FOOTER_ID = "m5-spatial-footer"
+_CONFUSION_FOOTER_ID = "m5-confusion-footer"
+_BOUNDARY_FOOTER_ID = "m5-boundary-footer"
+_MEAS_FOOTER_ID = "m5-meas-footer"
 _FILTER_ID = "m5-alg-filter"
 _COUNT_ID = "m5-count-slider"
 _BANNER_ID = "m5-banner"
@@ -137,6 +141,7 @@ def layout() -> html.Div:
             html.Div(id=_BANNER_ID),
             dcc.Store(id=_DATA_STORE_ID),
             _top_row(),
+            _reading_guide_card(),
             _diagnostic_grid(),
             _failure_legend(),
         ],
@@ -211,6 +216,10 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         Output(_CONFUSION_ID, "figure"),
         Output(_BOUNDARY_ID, "figure"),
         Output(_MEAS_ID, "figure"),
+        Output(_SPATIAL_FOOTER_ID, "children"),
+        Output(_CONFUSION_FOOTER_ID, "children"),
+        Output(_BOUNDARY_FOOTER_ID, "children"),
+        Output(_MEAS_FOOTER_ID, "children"),
         Input("sidebar-algorithm-dropdown", "value"),
         Input("sidebar-level-slider", "value"),
         Input("sidebar-sample-radio", "value"),
@@ -227,11 +236,13 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             badge = _badge(None)
             explanation = _explanation(None, algorithm)
             empty = empty_figure("No cached result for this case")
+            placeholder = _interpretation_placeholder("No data for this case.")
             return (chips, badge, explanation,
                     _thumbnails_placeholder("No cached result"),
                     _quick_metrics_placeholder("No metrics available"),
                     _signal_breakdown_placeholder("No classifier signals"),
-                    empty, empty, empty, empty)
+                    empty, empty, empty, empty,
+                    placeholder, placeholder, placeholder, placeholder)
 
         try:
             gt = _load_ground_truth(sample)
@@ -241,11 +252,13 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             badge = _badge(None)
             explanation = _explanation(None, algorithm)
             empty = empty_figure("Ground truth missing")
+            placeholder = _interpretation_placeholder("Ground truth missing.")
             return (chips, badge, explanation,
                     _thumbnails_placeholder("Ground truth missing"),
                     _quick_metrics_view(metrics),
                     _signal_breakdown_placeholder("Classifier needs GT"),
-                    empty, empty, empty, empty)
+                    empty, empty, empty, empty,
+                    placeholder, placeholder, placeholder, placeholder)
 
         pred = np.asarray(reconstruction, dtype=np.uint8)
         cm = compute_confusion_matrix(pred, gt)
@@ -265,8 +278,19 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         boundary_fig = _boundary_radial_figure(pred, gt, level)
         meas_fig = _measurement_residual_figure(level, sample, pred, gt)
 
+        spatial_footer = _spatial_interpretation(ssim_map, metrics.get("ssim"))
+        confusion_footer = _confusion_interpretation(cm)
+        boundary_footer = _boundary_interpretation(pred, gt, level)
+        try:
+            measurement = _LOADER.load(level=level, sample=sample)
+            per_inj = _per_injection_perturbation(measurement)
+        except Exception:  # noqa: BLE001
+            per_inj = None
+        meas_footer = _measurement_interpretation(per_inj)
+
         return (chips, badge, explanation, thumbs, quick, signals,
-                spatial_fig, confusion_fig, boundary_fig, meas_fig)
+                spatial_fig, confusion_fig, boundary_fig, meas_fig,
+                spatial_footer, confusion_footer, boundary_footer, meas_footer)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -516,16 +540,49 @@ def _selected_panel() -> html.Div:
 
 def _diagnostic_grid() -> html.Div:
     panels = [
-        _graph_panel("Spatial SSIM", "where the pixels lose the score",
-                     _SPATIAL_SSIM_ID, badge="SSIM", badge_color=ACCENT_SOFT),
-        _graph_panel("Confusion Matrix", "rows = ground truth · cols = prediction",
-                     _CONFUSION_ID, badge="CM", badge_color="#a07bff"),
-        _graph_panel("Boundary Error (polar)",
-                     "errors by angle · green = active electrode · gray × = removed",
-                     _BOUNDARY_ID, badge="∂", badge_color=DANGER),
-        _graph_panel("Measurement Perturbation (polar)",
-                     "blue = strong signal · red = weakest 25% · yellow dashed = threshold",
-                     _MEAS_ID, badge="V", badge_color=SUCCESS),
+        _graph_panel(
+            "Spatial SSIM", "where the pixels lose the score",
+            _SPATIAL_SSIM_ID, badge="SSIM", badge_color=ACCENT_SOFT,
+            footer_id=_SPATIAL_FOOTER_ID,
+            help_text=(
+                "Per-pixel SSIM map. Green = pixels that match the ground "
+                "truth, red = pixels that hurt the overall score the most. "
+                "Use it to localise WHERE the failure happened on the image."
+            ),
+        ),
+        _graph_panel(
+            "Confusion Matrix", "rows = ground truth · cols = prediction",
+            _CONFUSION_ID, badge="CM", badge_color="#a07bff",
+            footer_id=_CONFUSION_FOOTER_ID,
+            help_text=(
+                "Rows: true class. Columns: what the algorithm predicted. "
+                "The diagonal is correct; off-diagonal cells tell you WHAT "
+                "kind of mistake was made (ghost, missing, or class flip)."
+            ),
+        ),
+        _graph_panel(
+            "Boundary Error (polar)",
+            "errors by angle · green = active electrode · gray × = removed",
+            _BOUNDARY_ID, badge="∂", badge_color=DANGER,
+            footer_id=_BOUNDARY_FOOTER_ID,
+            help_text=(
+                "Angular histogram of wrongly classified pixels around the "
+                "tank centre. Tall bars in the gray × arc = blame the data; "
+                "errors spread around the full ring = blame the algorithm."
+            ),
+        ),
+        _graph_panel(
+            "Measurement Perturbation (polar)",
+            "blue = strong signal · red = weakest 25% · yellow dashed = threshold",
+            _MEAS_ID, badge="V", badge_color=SUCCESS,
+            footer_id=_MEAS_FOOTER_ID,
+            help_text=(
+                "For each current injection, how much the inclusion changed "
+                "the boundary voltages versus an empty tank. Red bars carry "
+                "almost no inclusion information — no algorithm can recover "
+                "what was never measured."
+            ),
+        ),
     ]
     return html.Div(
         panels,
@@ -545,49 +602,86 @@ def _graph_panel(
     badge: str = "",
     badge_color: str = ACCENT,
     height: int = 360,
+    footer_id: str | None = None,
+    help_text: str | None = None,
 ) -> html.Div:
-    return html.Div(
-        [
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Span(
-                                badge,
-                                style={
-                                    "display": "inline-block",
-                                    "padding": "2px 8px",
-                                    "borderRadius": "6px",
-                                    "backgroundColor": badge_color,
-                                    "color": "#fff" if badge_color != WARN else "#111",
-                                    "fontSize": "10px",
-                                    "fontWeight": 700,
-                                    "marginRight": "10px",
-                                },
-                            ),
-                            html.Span(title, style={"color": TEXT, "fontWeight": 600,
-                                                    "fontSize": "13.5px"}),
-                        ]
-                    ),
-                    html.Span(subtitle, style={"color": MUTED, "fontSize": "11.5px"}),
-                ],
+    title_block = [
+        html.Span(
+            badge,
+            style={
+                "display": "inline-block",
+                "padding": "2px 8px",
+                "borderRadius": "6px",
+                "backgroundColor": badge_color,
+                "color": "#fff" if badge_color != WARN else "#111",
+                "fontSize": "10px",
+                "fontWeight": 700,
+                "marginRight": "10px",
+            },
+        ),
+        html.Span(title, style={"color": TEXT, "fontWeight": 600,
+                                "fontSize": "13.5px"}),
+    ]
+    if help_text:
+        # Native browser tooltip via title attr — no extra callbacks needed.
+        title_block.append(
+            html.Span(
+                "?",
+                title=help_text,
                 style={
-                    "display": "flex", "alignItems": "center",
-                    "justifyContent": "space-between",
-                    "padding": "10px 14px",
-                    "borderBottom": f"1px solid {BORDER}",
+                    "display": "inline-flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "width": "16px", "height": "16px",
+                    "borderRadius": "999px",
+                    "backgroundColor": BORDER,
+                    "color": TEXT_DIM,
+                    "fontSize": "10px",
+                    "fontWeight": 700,
+                    "marginLeft": "8px",
+                    "cursor": "help",
                 },
+            )
+        )
+
+    children = [
+        html.Div(
+            [
+                html.Div(title_block),
+                html.Span(subtitle, style={"color": MUTED, "fontSize": "11.5px"}),
+            ],
+            style={
+                "display": "flex", "alignItems": "center",
+                "justifyContent": "space-between",
+                "padding": "10px 14px",
+                "borderBottom": f"1px solid {BORDER}",
+            },
+        ),
+        html.Div(
+            dcc.Graph(
+                id=graph_id,
+                figure=empty_figure("Loading…"),
+                config={"displayModeBar": False, "responsive": True},
+                style={"height": f"{height}px", "width": "100%"},
             ),
+            style={"padding": "6px 6px 10px"},
+        ),
+    ]
+    if footer_id:
+        children.append(
             html.Div(
-                dcc.Graph(
-                    id=graph_id,
-                    figure=empty_figure("Loading…"),
-                    config={"displayModeBar": False, "responsive": True},
-                    style={"height": f"{height}px", "width": "100%"},
-                ),
-                style={"padding": "6px 6px 10px"},
-            ),
-        ],
+                id=footer_id,
+                children=_interpretation_placeholder(),
+                style={
+                    "padding": "10px 14px 14px",
+                    "borderTop": f"1px dashed {BORDER}",
+                    "backgroundColor": CARD_ALT,
+                },
+            )
+        )
+
+    return html.Div(
+        children,
         style={
             **CARD_STYLE,
             "display": "flex",
@@ -664,6 +758,317 @@ def _failure_legend() -> html.Div:
             ),
         ],
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Reading guide & per-graph interpretation helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _reading_guide_card() -> html.Div:
+    """Static workflow strip explaining what each of the 4 graphs answers."""
+    steps = [
+        ("1", "Spatial SSIM", "WHERE on the image did the failure happen?",
+         ACCENT_SOFT),
+        ("2", "Confusion Matrix", "WHAT kind of mistake was made?",
+         "#a07bff"),
+        ("3", "Boundary (polar)", "Was the data sparse around that angle?",
+         DANGER),
+        ("4", "Measurement (polar)", "Did the injections even carry signal?",
+         SUCCESS),
+    ]
+    cells = []
+    for num, name, question, color in steps:
+        cells.append(html.Div(
+            [
+                html.Div(
+                    [
+                        html.Span(
+                            num,
+                            style={
+                                "display": "inline-flex",
+                                "alignItems": "center",
+                                "justifyContent": "center",
+                                "width": "22px", "height": "22px",
+                                "borderRadius": "999px",
+                                "backgroundColor": color,
+                                "color": "#111" if color == WARN else "#fff",
+                                "fontSize": "11px", "fontWeight": 700,
+                                "marginRight": "10px",
+                            },
+                        ),
+                        html.Span(name, style={"color": TEXT,
+                                               "fontWeight": 600,
+                                               "fontSize": "12.5px"}),
+                    ],
+                    style={"display": "flex", "alignItems": "center",
+                           "marginBottom": "6px"},
+                ),
+                html.Div(question, style={"color": TEXT_DIM,
+                                          "fontSize": "11.5px",
+                                          "lineHeight": "1.45"}),
+            ],
+            style={
+                "padding": "10px 14px",
+                "borderLeft": f"3px solid {color}",
+                "backgroundColor": CARD_ALT,
+                "borderRadius": "6px",
+            },
+        ))
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Span("How to Read This Module", style={
+                        "color": TEXT, "fontWeight": 600, "fontSize": "12px",
+                        "letterSpacing": "0.8px", "textTransform": "uppercase",
+                        "marginRight": "10px",
+                    }),
+                    html.Span("read the 4 panels left-to-right, top-to-bottom",
+                              style={"color": MUTED, "fontSize": "12px"}),
+                ],
+                style={
+                    "display": "flex", "alignItems": "baseline",
+                    "borderBottom": f"1px dashed {BORDER}",
+                    "paddingBottom": "6px", "marginBottom": "10px",
+                },
+            ),
+            html.Div(
+                cells,
+                style={
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(auto-fit, minmax(220px, 1fr))",
+                    "gap": "10px",
+                },
+            ),
+        ],
+        style={**CARD_STYLE, "padding": "14px 16px"},
+    )
+
+
+def _interpretation_placeholder(message: str = "Select a case to see the reading.") -> html.Div:
+    return html.Div(
+        message,
+        style={"color": MUTED, "fontSize": "11.5px", "fontStyle": "italic",
+               "lineHeight": "1.5"},
+    )
+
+
+def _interpretation_block(label: str, body: str, *, accent: str = ACCENT) -> html.Div:
+    """Compact 'reading' footer with a coloured label and one-sentence body."""
+    return html.Div(
+        [
+            html.Span(
+                label,
+                style={
+                    "display": "inline-block",
+                    "padding": "1px 7px",
+                    "borderRadius": "4px",
+                    "backgroundColor": accent,
+                    "color": "#111" if accent == WARN else "#fff",
+                    "fontSize": "9.5px", "fontWeight": 700,
+                    "letterSpacing": "0.6px",
+                    "textTransform": "uppercase",
+                    "marginRight": "8px",
+                    "verticalAlign": "middle",
+                },
+            ),
+            html.Span(body, style={"color": TEXT_DIM, "fontSize": "11.5px",
+                                   "lineHeight": "1.55"}),
+        ],
+    )
+
+
+def _spatial_interpretation(ssim_map: np.ndarray, ssim_score: float | None) -> html.Div:
+    """Plain-English reading of the spatial SSIM heatmap."""
+    arr = np.asarray(ssim_map, dtype=float)
+    if arr.size == 0:
+        return _interpretation_placeholder("Spatial SSIM map is empty.")
+
+    bad_mask = arr < 0
+    bad_pct = 100.0 * bad_mask.sum() / arr.size
+
+    if bad_pct < 0.5:
+        verdict = (f"Almost the whole image agrees with ground truth "
+                   f"({bad_pct:.1f}% red pixels). Errors are negligible.")
+        accent = SUCCESS
+    else:
+        # Centroid of red region (image coords: row 0 at top).
+        rows, cols = np.where(bad_mask)
+        if rows.size > 0:
+            cy = rows.mean() / arr.shape[0]   # 0..1, 0=top
+            cx = cols.mean() / arr.shape[1]   # 0..1, 0=left
+            vert = "top" if cy < 0.4 else ("bottom" if cy > 0.6 else "middle")
+            horiz = "left" if cx < 0.4 else ("right" if cx > 0.6 else "centre")
+            location = (f"{vert}-{horiz}" if vert != "middle" or horiz != "centre"
+                        else "centre of the tank")
+        else:
+            location = "the tank"
+
+        if bad_pct < 3:
+            verdict = (f"{bad_pct:.1f}% of pixels disagree with GT, "
+                       f"localised near the {location}. Small, focused error.")
+            accent = SUCCESS
+        elif bad_pct < 12:
+            verdict = (f"{bad_pct:.1f}% of pixels disagree with GT, "
+                       f"clustered near the {location}. Moderate, focused error.")
+            accent = WARN
+        else:
+            verdict = (f"{bad_pct:.1f}% of pixels disagree with GT, "
+                       f"largest red region near the {location}. "
+                       f"Wide-area failure.")
+            accent = DANGER
+
+    if ssim_score is not None:
+        verdict += f"  Overall SSIM = {float(ssim_score):.3f}."
+    return _interpretation_block("Reading", verdict, accent=accent)
+
+
+def _confusion_interpretation(cm: np.ndarray) -> html.Div:
+    """Identify the dominant off-diagonal cell and name the failure mode."""
+    arr = np.asarray(cm, dtype=float)
+    if arr.shape != (3, 3):
+        return _interpretation_placeholder("Confusion matrix has unexpected shape.")
+
+    labels = ["water", "resistive", "conductive"]
+    diag = np.diag(arr).copy()
+    off = arr.copy()
+    np.fill_diagonal(off, 0.0)
+
+    if off.max() <= 0:
+        return _interpretation_block(
+            "Reading",
+            "Diagonal-only — every pixel is in the correct class. "
+            f"Per-class accuracy: water {diag[0]*100:.0f}%, "
+            f"resistive {diag[1]*100:.0f}%, conductive {diag[2]*100:.0f}%.",
+            accent=SUCCESS,
+        )
+
+    i, j = np.unravel_index(int(np.argmax(off)), off.shape)
+    cell = float(off[i, j])
+
+    # Tag the failure family of the dominant off-diagonal.
+    if labels[i] == "water":
+        family = "ghost — pixels invented where there is nothing"
+        accent = DANGER
+    elif labels[j] == "water":
+        family = "missing — pixels erased where an inclusion exists"
+        accent = WARN
+    else:
+        family = "class flip — resistive vs conductive swapped"
+        accent = "#a07bff"
+
+    body = (f"Biggest single error: {cell*100:.1f}% of {labels[i]} pixels were "
+            f"predicted as {labels[j]} → {family}.")
+    if cell >= 0.20:
+        body += "  This is a dominant failure mode for this case."
+    return _interpretation_block("Reading", body, accent=accent)
+
+
+def _boundary_interpretation(
+    pred: np.ndarray, gt: np.ndarray, level: int,
+) -> html.Div:
+    """Compare error-angle distribution against the removed-electrode arc."""
+    pred_arr = np.asarray(pred)
+    gt_arr = np.asarray(gt)
+    err_mask = pred_arr != gt_arr
+    total_err = int(err_mask.sum())
+    if total_err == 0:
+        return _interpretation_block(
+            "Reading",
+            "No misclassified pixels — there is no boundary error to localise.",
+            accent=SUCCESS,
+        )
+
+    h, w = err_mask.shape
+    cy, cx = (h - 1) / 2.0, (w - 1) / 2.0
+    rows, cols = np.where(err_mask)
+    # Image coords → math angle in degrees [0, 360), 0° = +x, CCW.
+    angles = np.degrees(np.arctan2(-(rows - cy), cols - cx)) % 360.0
+
+    # Removed-electrode arc: full ring has 32 electrodes; level keeps the
+    # first N evenly-spaced ones, so the removed arc is the high-angle slice.
+    n_total = 32
+    n_active = max(1, n_total - 2 * (level - 1))
+    # Active electrodes occupy angles 0..(n_active/n_total * 360).
+    active_end_deg = (n_active / n_total) * 360.0
+    in_removed = (angles >= active_end_deg) & (angles < 360.0)
+    removed_pct = 100.0 * in_removed.sum() / total_err if total_err else 0.0
+    expected_pct = max(0.0, 100.0 * (n_total - n_active) / n_total)
+
+    # Peak bin (36 bins of 10°).
+    hist, edges = np.histogram(angles, bins=36, range=(0, 360))
+    peak_bin = int(np.argmax(hist))
+    peak_deg = (edges[peak_bin] + edges[peak_bin + 1]) / 2.0
+    peak_share = 100.0 * hist[peak_bin] / total_err
+
+    if level <= 1:
+        body = (f"All {n_total} electrodes active. Error peaks around "
+                f"{peak_deg:.0f}° ({peak_share:.0f}% of all error pixels). "
+                f"No data-side blind arc — this is algorithm-side.")
+        accent = "#a07bff"
+    elif removed_pct >= 1.5 * expected_pct and removed_pct >= 25:
+        body = (f"{removed_pct:.0f}% of errors fall in the removed-electrode "
+                f"arc (≈{expected_pct:.0f}% expected by area). "
+                f"Data-side limitation dominates this failure.")
+        accent = DANGER
+    elif removed_pct <= expected_pct * 0.6:
+        body = (f"Only {removed_pct:.0f}% of errors land in the removed "
+                f"arc ({expected_pct:.0f}% expected). Error peaks at "
+                f"{peak_deg:.0f}° — algorithm-side, not data-sparsity.")
+        accent = "#a07bff"
+    else:
+        body = (f"Errors spread fairly evenly around the ring; "
+                f"{removed_pct:.0f}% in the removed arc vs "
+                f"{expected_pct:.0f}% expected. Mixed cause.")
+        accent = WARN
+    return _interpretation_block("Reading", body, accent=accent)
+
+
+def _measurement_interpretation(per_inj: np.ndarray | None) -> html.Div:
+    """Describe how much of the measurement set is starved of inclusion signal."""
+    if per_inj is None:
+        return _interpretation_placeholder("Could not load raw measurements.")
+
+    arr = np.asarray(per_inj, dtype=float)
+    if arr.size == 0:
+        return _interpretation_placeholder("No per-injection values available.")
+
+    threshold = float(np.percentile(arr, 25))
+    weak = arr < threshold
+    weak_pct = 100.0 * weak.sum() / arr.size
+
+    rng = float(arr.max() - arr.min())
+    med = float(np.median(arr))
+    contrast = (rng / med) if med > 1e-9 else 0.0
+
+    # Angular position of weak injections (assume evenly spread around 360°).
+    n = arr.size
+    weak_idx = np.where(weak)[0]
+    if weak_idx.size:
+        weak_angles = (weak_idx / n) * 360.0
+        ang_mean = float(weak_angles.mean())
+        ang_spread = float(weak_angles.max() - weak_angles.min())
+        location = (f"clustered near {ang_mean:.0f}°"
+                    if ang_spread < 90 else "spread around the ring")
+    else:
+        location = "n/a"
+
+    if contrast < 0.15:
+        body = (f"Signal is nearly flat ({contrast*100:.0f}% peak-to-median "
+                f"contrast). Most injections carry little inclusion info; "
+                f"algorithms have very thin data to work with.")
+        accent = DANGER
+    elif weak_pct >= 30:
+        body = (f"{weak_pct:.0f}% of injections are below the weak-signal "
+                f"threshold ({location}). Reconstruction near those angles "
+                f"is data-limited.")
+        accent = WARN
+    else:
+        body = (f"Healthy signal — only {weak_pct:.0f}% of injections fall "
+                f"below the P25 weak line ({location}). Algorithm had usable "
+                f"data; any failure is algorithm-side.")
+        accent = SUCCESS
+    return _interpretation_block("Reading", body, accent=accent)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
