@@ -768,20 +768,19 @@ def layout() -> html.Div:
                            "Polar bar · red = source, blue = sink",
                            _CURRENT_ID, badge="I", badge_color=DANGER, height=380,
                            interpretation=(
-                               "Red bars = source electrode injecting current (+). "
-                               "Blue bars = sink electrode collecting current (−). "
-                               "Bar height = current magnitude. Grey ✕ = electrode removed at "
-                               "this difficulty level. Each injection step rotates the pair "
-                               "around the tank — step through all of them to see full coverage."
+                               "Polar bar chart of injected current for one step. "
+                               "Red bars (+) = source electrode, blue bars (−) = sink electrode; bar height = current magnitude in mA. "
+                               "Grey ✕ = electrode removed at this difficulty level. "
+                               "Step through all injections to confirm the source/sink pair sweeps the full tank — gaps at higher levels reveal angular blind spots."
                            )),
                     _panel("Electrode Voltages",
                            "Measured vs. empty-tank reference",
                            _VOLTAGE_POLAR_ID, badge="V", badge_color=ACCENT, height=380,
                            interpretation=(
-                               "Each point is one measurement pair placed at its electrode "
-                               "angle on the rim. Solid line = measured voltage with inclusions. "
-                               "Dashed line = empty-tank reference. Where the two lines diverge, "
-                               "an inclusion is disturbing the current path near those electrodes."
+                               "Polar overlay of measured voltages (solid) versus the empty-tank reference (dashed), with each point placed at its electrode-pair angle. "
+                               "Where the two lines diverge, an inclusion is redirecting current near those electrodes. "
+                               "Symmetric divergence on opposite sides suggests an inclusion along that diameter. "
+                               "If the lines fully overlap, this injection direction is not sensitive to the inclusion — check other steps."
                            )),
                 ],
                 style=_grid(420),
@@ -795,11 +794,10 @@ def layout() -> html.Div:
                         "Per measurement pair for the selected injection",
                         _VOLTAGE_DIFF_ID, badge="ΔV", badge_color=SUCCESS, height=280,
                         interpretation=(
-                            "ΔV = V_measured − V_reference per pair. "
-                            "Green bar = voltage increased (inclusion pushed current toward "
-                            "this pair). Red bar = voltage decreased. "
-                            "Large |ΔV| marks pairs whose current path passes near an inclusion — "
-                            "this is the direct input signal used by ABC1 and CUQI8."
+                            "ΔV = V_measured − V_reference per pair; this is the direct input signal used by reconstruction algorithms. "
+                            "Green bar = voltage rose (inclusion pushed current toward that pair); red bar = voltage fell. "
+                            "A cluster of tall bars points to the angular region where the inclusion sits. "
+                            "Isolated large bars surrounded by near-zero neighbours are more likely electrode noise than a true inclusion signal."
                         ))],
                 style=_grid(420),
             ),
@@ -813,31 +811,28 @@ def layout() -> html.Div:
                            "Green = positive · red = negative",
                            _RES_BAR_ID, badge="R", badge_color=WARN, height=260,
                            interpretation=(
-                               "R = V/I for each measurement pair. "
-                               "Green = positive resistance (expected). "
-                               "Red = sign reversal — may indicate an inclusion, "
-                               "electrode contact problem, or strong current deflection. "
-                               "Compare heights across pairs to spot outliers."
+                               "R = V/I for each measurement pair at the selected injection step. "
+                               "Green = positive resistance (normal); red = sign reversal, which can indicate a conductive inclusion, strong current deflection, or an electrode contact problem. "
+                               "Outlier bars — much taller or shorter than their neighbours — mark pairs whose current path is strongly perturbed by an inclusion. "
+                               "A smooth profile with no outliers means this injection direction is not sensitive to the inclusion."
                            )),
                     _panel("ΔR = R − R_ref",
                            "Resistance difference · pre-reconstruction anomaly signal",
                            _RES_DELTA_ID, badge="ΔR", badge_color=DANGER, height=260,
                            interpretation=(
-                               "ΔR = R_measured − R_reference per pair. "
-                               "A large positive bar means the inclusion raised resistance "
-                               "for that pair; a large negative bar means it lowered it. "
-                               "This is the resistance-domain counterpart of ΔV and directly "
-                               "reveals where inclusions perturb the current field."
+                               "ΔR = R_measured − R_reference isolates the inclusion's effect from the baseline tank geometry. "
+                               "Positive bar (green) = inclusion raised resistance for that pair; negative bar (red) = inclusion lowered it (conductive anomaly). "
+                               "Near-zero bars indicate pairs insensitive to the inclusion for this injection direction. "
+                               "A narrow cluster of large bars suggests a small localised anomaly; a wide cluster suggests a large or diffuse one."
                            )),
                     _panel("Signal-to-Noise per Pair",
                            "|ΔV|/|V_ref| · bright = high information content",
                            _SNR_ID, badge="SNR", badge_color="#5b8def", height=260,
                            interpretation=(
-                               "|ΔV| / |V_ref| per pair. "
-                               "A tall, bright-orange bar means the inclusion signal is large "
-                               "relative to the background — that pair is highly informative. "
-                               "Short bars carry little diagnostic value and may be noise-dominated. "
-                               "Use this to judge which pairs are worth trusting in reconstruction."
+                               "|ΔV| / |V_ref| per pair — how large the inclusion signal is relative to the background voltage. "
+                               "Tall, bright-orange bars = highly informative pairs; short pale bars contribute little and may be noise-dominated. "
+                               "If all bars are near zero, the inclusion lies in a shadow zone for this injection — other steps will cover it. "
+                               "High-SNR pairs can be trusted more during inversion; low-SNR pairs may need down-weighting."
                            )),
                 ],
                 style=_grid(340),
@@ -852,23 +847,19 @@ def layout() -> html.Div:
                            "Grey = other injections · highlighted = selected",
                            _RES_OVERLAY_ID, badge="2", badge_color="#a07bff", height=260,
                            interpretation=(
-                               "Each grey line is one injection's R profile. "
-                               "The highlighted yellow line is the selected injection. "
-                               "Wide spread between grey lines = high variability across injections, "
-                               "which is a good sign — the measurement set covers different "
-                               "current paths. If the highlighted line sits far from the cluster, "
-                               "that injection is especially sensitive to the inclusions."
+                               "Every injection's R profile drawn at once; the selected injection is highlighted in yellow. "
+                               "Wide spread in the grey bundle = diverse current paths — good for reconstruction. "
+                               "If the yellow line sits far from the cluster for specific pairs, those pairs are especially sensitive to the inclusion for this direction. "
+                               "A single grey line deviating sharply from all others may indicate a faulty injection step or electrode drop-out."
                            )),
                     _panel("Mean ± Std Summary",
                            "All injections aggregated · static · updates on level/sample change",
                            _RES_SUMMARY_ID, badge="3", badge_color=SUCCESS, height=260,
                            interpretation=(
-                               "Purple line = mean R per pair across all injections. "
-                               "Shaded band = ±1 standard deviation. "
-                               "Orange marker color = high std (high variability). "
-                               "Pairs with large std are the most informative — their resistance "
-                               "shifts significantly as the injection pattern changes, "
-                               "signalling that inclusions are re-routing current through them."
+                               "Purple line = mean R per pair across all injections; shaded band = ±1 std. "
+                               "Orange marker colour = high standard deviation — those pairs are the most informative because their resistance shifts significantly with injection direction. "
+                               "Pairs with a very narrow band are stable but carry little spatial information. "
+                               "At higher difficulty levels the band narrows overall, reflecting reduced measurement diversity."
                            )),
                 ],
                 style=_grid(420),
@@ -884,23 +875,19 @@ def layout() -> html.Div:
                            "Σ|ΔR| · taller = more inclusion influence",
                            _ANOMALY_ID, badge="A", badge_color=DANGER, height=260,
                            interpretation=(
-                               "Each bar = Σ|ΔR| summed over all measurement pairs for one "
-                               "injection. Taller bar = that injection pattern was more strongly "
-                               "affected by the inclusions. Yellow bar = currently selected "
-                               "injection. Use this to identify which injection steps carry the "
-                               "most reconstruction information, or to spot outlier injections "
-                               "with unexpectedly high anomaly (possible hardware fault)."
+                               "Each bar = Σ|ΔR| summed over all pairs for one injection; taller bar = that direction was more strongly perturbed by inclusions. "
+                               "Yellow bar = currently selected injection. "
+                               "A peaked distribution (few very tall bars) means the inclusions sit near specific source/sink axes. "
+                               "An isolated outlier bar far above its neighbours with no physical adjacency may be a hardware fault rather than a real inclusion signal."
                            )),
                     _panel("Measurement Stability",
                            "CV across all injections · static · updates on level/sample change",
                            _STABILITY_ID, badge="CV", badge_color="#a07bff", height=260,
                            interpretation=(
-                               "CV = std / |mean| per pair across all injections. "
-                               "A low CV (green) means the pair gives consistent readings "
-                               "regardless of injection pattern — reliable but less informative. "
-                               "A high CV (red, above dashed line) means readings vary widely — "
-                               "the pair is sensitive to the domain but may also reflect "
-                               "electrode contact instability or measurement noise."
+                               "CV = std / |mean| per pair across all injections — how consistently each pair reads regardless of which electrodes inject. "
+                               "Green bar = stable (below 2× median threshold); red bar = high variability, either from inclusion sensitivity or electrode instability. "
+                               "A few isolated red bars near the inclusion region are healthy. "
+                               "Many consecutive red bars far from the inclusion suggest electrode contact problems or systematic noise."
                            )),
                 ],
                 style=_grid(420),
@@ -915,22 +902,19 @@ def layout() -> html.Div:
                            "Mean |R| per electrode · static · updates on level/sample change",
                            _IMPEDANCE_ID, badge="Z", badge_color=WARN, height=260,
                            interpretation=(
-                               "Mean |R| per electrode across all pairs it participates in. "
-                               "Electrodes with unusually high mean |R| (red bars above the "
-                               "dashed 2× median line) may have poor galvanic contact or high "
-                               "contact impedance — they could degrade reconstruction quality. "
-                               "Green bars are within the expected range for this phantom."
+                               "Mean |R| per electrode averaged over every pair it participates in — a proxy for galvanic contact quality. "
+                               "Green bar = within normal range; red bar = above the 2× median threshold, indicating possible high contact impedance or poor coupling. "
+                               "One or two isolated red bars are common; multiple consecutive red bars (e.g. E5–E7) suggest a connector block issue. "
+                               "High-impedance electrodes reduce effective SNR for every pair they belong to."
                            )),
                     _panel("Coverage per Level",
                            "Electrode & pair count per level · static · updates on level change",
                            _LEVEL_COVERAGE_ID, badge="L", badge_color="#5b8def", height=260,
                            interpretation=(
-                               "Blue bars = active electrode count at each difficulty level. "
-                               "Green line = measurement pair count (right axis). "
+                               "Blue bars = active electrode count per difficulty level (L1–L7); green line = measurement pair count (right axis). "
                                "Highlighted bar = current level. "
-                               "Both drop steeply from L1 to L7 — this is exactly why "
-                               "reconstruction quality degrades at higher levels: fewer electrodes "
-                               "mean fewer independent current paths and less spatial coverage."
+                               "Both drop from L1 to L7, but pairs fall faster than electrodes because pair count scales roughly as N². "
+                               "Fewer pairs means fewer independent current paths — the direct reason reconstruction quality degrades at higher difficulty levels."
                            )),
                 ],
                 style=_grid(420),
@@ -945,13 +929,10 @@ def layout() -> html.Div:
                         "Red = source · blue = sink · updates every injection step",
                         _COVERAGE_POLAR_ID, badge="M", badge_color=ACCENT, height=400,
                         interpretation=(
-                            "Electrode positions arranged around the 32-slot tank rim. "
-                            "Blue circles = active electrodes. Grey ✕ = removed at this level. "
-                            "Large red dot = source (+) electrode for this injection. "
-                            "Large blue dot = sink (−) electrode. "
-                            "Faint purple lines connect sampled measurement pairs. "
-                            "Press Play to watch the source/sink pair rotate — gaps in the "
-                            "rotation correspond to removed electrodes at higher levels."
+                            "Spatial map of the 32-electrode tank rim for the selected injection step. "
+                            "Blue circles = active electrodes; grey ✕ = removed at this level; large red dot = source (+); large blue dot = sink (−). "
+                            "Faint purple lines connect a sampled subset of active measurement pairs. "
+                            "Press Play to watch the source/sink pair rotate — gaps in the sweep at higher levels are angular blind spots where removed electrodes reduce reconstruction sensitivity."
                         ))],
                 style=_grid(420),
             ),
@@ -1137,9 +1118,6 @@ def _panel(
     height: int = 340,
     interpretation: str = "",
 ) -> html.Div:
-    # Extra height: 62px header/padding + 32px interpretation if present
-    interp_h  = 48 if interpretation else 0
-    card_height = height + 62 + interp_h
     children = [
         html.Div(
             [
@@ -1171,17 +1149,18 @@ def _panel(
         children.append(html.Div(
             interpretation,
             style={
-                "padding": "6px 14px 10px",
+                "padding": "8px 14px 14px",
                 "fontSize": "11px",
-                "lineHeight": "1.5",
+                "lineHeight": "1.65",
                 "color": "#8a9ab8",
                 "borderTop": f"1px dashed {BORDER}",
+                "whiteSpace": "pre-line",
             },
         ))
     return html.Div(
         children,
-        style={**CARD_STYLE, "height": f"{card_height}px",
-               "display": "flex", "flexDirection": "column", "overflow": "hidden"},
+        style={**CARD_STYLE, "minHeight": f"{height + 62}px",
+               "display": "flex", "flexDirection": "column", "overflow": "visible"},
     )
 
 
