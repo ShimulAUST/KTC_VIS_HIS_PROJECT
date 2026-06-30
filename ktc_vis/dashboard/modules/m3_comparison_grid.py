@@ -16,6 +16,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import plotly.colors as pc
 import plotly.graph_objects as go
 from dash import Input, Output, dcc, html
 
@@ -118,8 +119,9 @@ def layout() -> html.Div:
             # ── Row 3: voltage chart + metrics scorecard ──────────────────────
             _section_label(
                 "Measurement Data & Metrics",
-                "Left: measured voltage pattern (rows = injections, cols = channels). "
-                "Right: per-algorithm quality scores from the benchmark cache.",
+                "Left: shows how much voltage was measured at each electrode channel — "
+                "each bar colour is a different current injection. "
+                "Right: how well each algorithm performed, based on saved test results.",
             ),
             _bottom_row(),
         ],
@@ -262,7 +264,7 @@ def _bottom_row() -> html.Div:
                                              "fontSize": "13.5px"}),
                         ]
                     ),
-                    html.Span("rows = injections · cols = measurement channels",
+                    html.Span("voltage at each channel · one colour per injection · up to 8 injections shown",
                               style={"color": MUTED, "fontSize": "11.5px"}),
                 ],
                 style=_PANEL_HDR,
@@ -272,9 +274,58 @@ def _bottom_row() -> html.Div:
                     id=_VOLTAGE_ID,
                     figure=empty_figure("Loading…"),
                     config={"displayModeBar": False, "responsive": True},
-                    style={"height": "300px", "width": "100%"},
+                    style={"height": "500px", "width": "100%"},
                 ),
-                style={"padding": "6px 6px 10px"},
+                style={"padding": "6px 6px 4px"},
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Span("X-axis", style={
+                                "color": ACCENT, "fontWeight": 700,
+                                "fontSize": "10.5px", "marginRight": "4px",
+                            }),
+                            html.Span(
+                                "Measurement channel — each electrode position around the phantom.",
+                                style={"color": MUTED, "fontSize": "10.5px"},
+                            ),
+                        ],
+                        style={"marginBottom": "4px"},
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Y-axis", style={
+                                "color": ACCENT, "fontWeight": 700,
+                                "fontSize": "10.5px", "marginRight": "4px",
+                            }),
+                            html.Span(
+                                "Voltage (V) recorded at that channel during the injection.",
+                                style={"color": MUTED, "fontSize": "10.5px"},
+                            ),
+                        ],
+                        style={"marginBottom": "4px"},
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Colour", style={
+                                "color": ACCENT, "fontWeight": 700,
+                                "fontSize": "10.5px", "marginRight": "4px",
+                            }),
+                            html.Span(
+                                "Each bar colour represents one injection — purple = early, "
+                                "yellow = late. Up to 8 injections are evenly sampled from "
+                                "the full set so the chart stays readable.",
+                                style={"color": MUTED, "fontSize": "10.5px"},
+                            ),
+                        ],
+                    ),
+                ],
+                style={
+                    "padding": "8px 14px 12px",
+                    "borderTop": f"1px dashed {BORDER}",
+                    "lineHeight": "1.6",
+                },
             ),
         ],
         style={
@@ -526,54 +577,122 @@ def _diff_figure(
     return fig
 
 
+_MAX_INJ_SHOWN = 8   # max injections shown per channel group
+_MAX_CH_SHOWN = 32   # max channels on x-axis before range-slider kicks in
+
+
 def _voltage_figure(measurement) -> go.Figure:
-    """Heatmap of the voltage measurement matrix (injections × channels)."""
-    V = measurement.voltage_matrix  # (n_inj, n_channels)
+    """Grouped bar chart — x = channel, bars per channel = one per injection.
 
-    # Normalise each injection row to highlight pattern shape, not magnitude
-    row_max = np.abs(V).max(axis=1, keepdims=True)
-    row_max = np.where(row_max == 0, 1.0, row_max)
-    V_norm = V / row_max
-
+    Each channel gets a cluster of bars, one bar per (sampled) injection.
+    Injections are colour-coded blue→red via the Plasma palette so you can
+    immediately see how the voltage pattern shifts with the injection index.
+    A range-slider appears when there are more than _MAX_CH_SHOWN channels.
+    """
+    V = measurement.voltage_matrix  # (n_inj, n_ch)
     n_inj, n_ch = V.shape
-    fig = go.Figure(
-        go.Heatmap(
-            z=V_norm,
-            colorscale="RdBu",
-            zmid=0,
-            showscale=True,
-            colorbar=dict(
-                thickness=8, len=0.8,
-                title=dict(text="norm. V", font=dict(color=MUTED, size=9),
-                           side="right"),
-                tickfont=dict(color=MUTED, size=9),
-            ),
-            hovertemplate=(
-                "inj:%{y}<br>ch:%{x}<br>norm-V:%{z:.3f}<extra></extra>"
-            ),
+
+    # ── Sample injections when there are more than the cap ────────────────────
+    if n_inj <= _MAX_INJ_SHOWN:
+        inj_indices = list(range(n_inj))
+    else:
+        step = n_inj / _MAX_INJ_SHOWN
+        inj_indices = sorted(
+            set(min(int(round(i * step)), n_inj - 1) for i in range(_MAX_INJ_SHOWN))
         )
+
+    # ── Sample channels when there are more than the cap ──────────────────────
+    if n_ch <= _MAX_CH_SHOWN:
+        ch_indices = list(range(n_ch))
+    else:
+        step = n_ch / _MAX_CH_SHOWN
+        ch_indices = sorted(
+            set(min(int(round(i * step)), n_ch - 1) for i in range(_MAX_CH_SHOWN))
+        )
+
+    x_labels = [f"Ch {ch + 1}" for ch in ch_indices]
+    palette = pc.sample_colorscale("Plasma", max(len(inj_indices), 2))
+
+    fig = go.Figure()
+
+    # One trace per injection — all sharing the same channel x-axis positions
+    for slot, inj_idx in enumerate(inj_indices):
+        y_values = [float(V[inj_idx, ch]) for ch in ch_indices]
+        color = palette[slot]
+        fig.add_trace(
+            go.Bar(
+                name=f"Inj {inj_idx + 1}",
+                x=x_labels,
+                y=y_values,
+                marker=dict(
+                    color=color,
+                    line=dict(width=0.5, color="rgba(0,0,0,0.3)"),
+                    opacity=0.88,
+                ),
+                hovertemplate=(
+                    f"<b>Injection {inj_idx + 1}</b><br>"
+                    "Channel: %{x}<br>"
+                    "Voltage: %{y:.4f} V"
+                    "<extra></extra>"
+                ),
+            )
+        )
+
+    inj_note = (
+        f"{len(inj_indices)} of {n_inj} inj sampled"
+        if n_inj > _MAX_INJ_SHOWN else f"{n_inj} injections"
     )
+    ch_note = (
+        f", {len(ch_indices)} of {n_ch} ch sampled"
+        if n_ch > _MAX_CH_SHOWN else f" × {n_ch} channels"
+    )
+
+    show_rangeslider = n_ch > _MAX_CH_SHOWN
+
     fig.update_layout(
+        barmode="group",
+        bargap=0.18,
+        bargroupgap=0.06,
         paper_bgcolor=CARD,
         plot_bgcolor="#1a1a2e",
-        margin=dict(l=48, r=48, t=36, b=36),
+        margin=dict(l=60, r=110, t=44, b=50),
+        legend=dict(
+            title=dict(text="Injection", font=dict(color=MUTED, size=9)),
+            font=dict(color=TEXT, size=9),
+            bgcolor="rgba(20,20,40,0.7)",
+            bordercolor=BORDER,
+            borderwidth=1,
+            orientation="v",
+            yanchor="top",
+            y=1.0,
+            xanchor="left",
+            x=1.01,
+        ),
         title=dict(
             text=(
-                f"Voltage Matrix · L{measurement.level}/{measurement.sample.upper()} "
-                f"· {n_inj} injections × {n_ch} channels"
+                f"Voltage Measurement Pattern · "
+                f"L{measurement.level}/{measurement.sample.upper()} · "
+                f"{inj_note}{ch_note}"
             ),
-            x=0.5, font=dict(color="#ddd", size=11),
+            x=0.5,
+            xanchor="center",
+            font=dict(color="#ddd", size=11),
         ),
         xaxis=dict(
-            title=dict(text="Measurement channel", font=dict(color=MUTED, size=10)),
-            tickfont=dict(color=MUTED, size=9),
-            gridcolor="#2e2e44", zeroline=False,
+            title=dict(text="Measurement Channel", font=dict(color=MUTED, size=10)),
+            tickfont=dict(color=MUTED, size=8),
+            tickangle=-40,
+            gridcolor="#2e2e44",
+            zeroline=False,
+            rangeslider=dict(visible=show_rangeslider, thickness=0.05),
         ),
         yaxis=dict(
-            title=dict(text="Injection pattern", font=dict(color=MUTED, size=10)),
+            title=dict(text="Voltage (V)", font=dict(color=MUTED, size=10)),
             tickfont=dict(color=MUTED, size=9),
-            gridcolor="#2e2e44", zeroline=False,
-            autorange="reversed",
+            gridcolor="#2e2e44",
+            zeroline=True,
+            zerolinecolor="#555",
+            zerolinewidth=1,
         ),
         uirevision="constant",
     )
@@ -963,7 +1082,11 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
         # ── 5. Voltage figure ─────────────────────────────────────────────────
         if measurement is not None:
-            voltage_fig = _voltage_figure(measurement)
+            try:
+                voltage_fig = _voltage_figure(measurement)
+            except Exception as exc:
+                logger.exception("M3 voltage figure failed")
+                voltage_fig = empty_figure(f"Voltage chart error: {exc}")
         else:
             voltage_fig = empty_figure("Measurement data unavailable")
 
