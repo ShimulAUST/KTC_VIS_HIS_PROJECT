@@ -193,11 +193,12 @@ def layout() -> html.Div:
 
         # ── Degradation curves (row 3: speed) ─────────────────────────────────
         html.Div([
-            _curve_card("Runtime (s)  ·  lower is faster  ·  axis 0–60 s",
+            _curve_card("Runtime  ·  lower is faster  ·  log axis (per-algorithm auto-scale)",
                         "m2-runtime-graph",
-                        "Wall-clock seconds to produce one reconstruction. "
-                        "Y-axis is fixed (0–60 s) so values are directly comparable across algorithms. "
-                        "Available only when running live algorithms via scripts/benchmark_runtime_*.py."),
+                        "Wall-clock time to produce one reconstruction, log-scaled so per-level and "
+                        "per-sample variation is visible within each algorithm. Typical magnitudes: "
+                        "ABC1 ≈ 22 s, PNPE2E ≈ 42 s, CUQI8 ≈ 100 min. "
+                        "CUQI8 values are estimated from an observed 48 h batch — see runtime_log.md."),
         ], style={"display": "flex", "gap": "12px", "marginBottom": "20px"}),
 
         # ── Dynamic commentary section label ──────────────────────────────────
@@ -357,7 +358,14 @@ _FIXED_Y_RANGE: dict[str, tuple[float, float]] = {
     "ssim": (0.0, 1.0),
     "iou_mean": (0.0, 1.0),
     "dice": (0.0, 1.0),
-    "runtime": (0.0, 60.0),   # seconds; covers ABC1/PNPE2E (~17-27s) + CUQI8 headroom
+}
+
+# Metrics that render on a log Y-axis. Value is (min_log10, max_log10) or None
+# for per-algorithm auto-range. Runtime uses auto-range so each algorithm's
+# variation is clearly visible (ABC1 ~22 s, PNPE2E ~42 s, CUQI8 ~6000 s live in
+# very different bands — a single fixed range crushes the shape of each curve).
+_LOG_Y_RANGE: dict[str, tuple[float, float] | None] = {
+    "runtime": None,  # auto-range log per algorithm
 }
 
 
@@ -402,7 +410,16 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
         "gridcolor": CARD_ALT,
         "zeroline": False,
     }
-    if metric in _FIXED_Y_RANGE:
+    if metric in _LOG_Y_RANGE:
+        yaxis_cfg["type"] = "log"
+        rng = _LOG_Y_RANGE[metric]
+        if rng is None:
+            yaxis_cfg["autorange"] = True
+        else:
+            lo, hi = rng
+            yaxis_cfg["range"] = [lo, hi]
+            yaxis_cfg["autorange"] = False
+    elif metric in _FIXED_Y_RANGE:
         lo, hi = _FIXED_Y_RANGE[metric]
         yaxis_cfg["range"] = [lo, hi]
         yaxis_cfg["autorange"] = False
@@ -909,7 +926,12 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
             runtime = metrics.get("runtime")
             if runtime is not None and runtime >= _RUNTIME_REAL_THRESHOLD_S:
-                chips.append(_chip("runtime", f"{runtime:.2f} s"))
+                if runtime >= 60:
+                    m_, s_ = divmod(int(runtime), 60)
+                    rt_label = f"{m_}m {s_:02d}s" if m_ < 60 else f"{m_//60}h {m_%60:02d}m"
+                else:
+                    rt_label = f"{runtime:.1f} s"
+                chips.append(_chip("runtime", rt_label))
         except Exception:
             chips.append(_chip("pixel agreement", "n/a", accent=MUTED))
 
