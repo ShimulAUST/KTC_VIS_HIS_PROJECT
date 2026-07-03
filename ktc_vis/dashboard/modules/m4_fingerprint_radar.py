@@ -29,7 +29,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _CACHE_PATH = _PROJECT_ROOT / "data" / "cache" / "results.h5"
 
 _ALGORITHMS = ["abc1", "cuqi8", "pnpe2e"]
-_SAMPLES = ["a", "b", "c"]
+_SAMPLES = ["a", "b", "c", "d"]
 
 _LABEL = {"abc1": "ABC1", "cuqi8": "CUQI8", "pnpe2e": "PNPE2E"}
 _COLOR = {"abc1": "#f4a261", "cuqi8": "#a855f7", "pnpe2e": "#10b981"}
@@ -544,8 +544,10 @@ def _build_heatmap(
             is_best = abs(score - best) < 1e-6 and best > 0
 
             # Cell background tinted by algorithm color at score opacity
+            # (score still drives the bar/tint so relative standing stays
+            # visible — only the raw value is printed, never the 0-1 score)
             cell_bg = _hex_rgba(_COLOR[alg], score * 0.18)
-            score_color = _score_color(score)
+            value_color = _score_color(score)
 
             cells.append(html.Div(
                 [
@@ -565,9 +567,9 @@ def _build_heatmap(
                     html.Div(
                         [
                             html.Span(
-                                f"{score:.3f}",
+                                _fmt_raw(axis, raw_v),
                                 style={
-                                    "color": score_color,
+                                    "color": value_color,
                                     "fontWeight": 700 if is_best else 500,
                                     "fontSize": "14px",
                                     "fontVariantNumeric": "tabular-nums",
@@ -577,10 +579,6 @@ def _build_heatmap(
                                       style={"color": WARN, "fontSize": "11px"}),
                         ],
                         style={"marginBottom": "2px"},
-                    ),
-                    html.Div(
-                        _fmt_raw(axis, raw_v),
-                        style={"color": MUTED, "fontSize": "10px"},
                     ),
                 ],
                 style={
@@ -603,7 +601,8 @@ def _build_heatmap(
                 "color": MUTED, "fontSize": "10px", "letterSpacing": "0.9px",
                 "fontWeight": 600, "textTransform": "uppercase", "marginRight": "12px",
             }),
-            html.Span("Normalised [0–1]. ★ = best per axis. Inverted axes: "
+            html.Span("Raw measured values. Bar length = relative score per axis. "
+                      "★ = best per axis. Inverted axes: "
                       "Speed, Robustness, Voltage Residual.",
                       style={"color": MUTED, "fontSize": "11.5px"}),
         ],
@@ -751,9 +750,9 @@ def _score_color(score: float) -> str:
 
 def _fmt_raw(axis: str, value: float) -> str:
     if np.isnan(value):
-        return "n/a"
+        value = 0.0
     if axis == "Speed":
         return f"{value:.2f} s"
     if axis == "Robustness":
         return f"std {value:.3f}"
-    return f"raw {value:.3f}"
+    return f"{value:.3f}"
