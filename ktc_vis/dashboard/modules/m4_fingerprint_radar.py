@@ -750,7 +750,7 @@ def _score_color(score: float) -> str:
 
 def _fmt_raw(axis: str, value: float) -> str:
     if np.isnan(value):
-        value = 0.0
+        return "n/a"
     if axis == "Speed":
         return f"{value:.2f} s"
     if axis == "Robustness":
