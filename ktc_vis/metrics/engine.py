@@ -1,4 +1,4 @@
-"""Metrics engine. Owner: Smit Savani."""
+# Metrics engine.
 
 import time
 from pathlib import Path
@@ -33,14 +33,7 @@ def _nan_to_zero(value: float) -> float:
 
 
 class MetricsEngine:
-    """Computes all metrics for a given (algorithm, level, sample) combination.
-
-    Results are cached in HDF5 — second call returns from cache instantly.
-
-    Args:
-        adapter: The algorithm adapter to use for reconstruction.
-        cache_path: Path to the HDF5 cache file.
-    """
+    # Computes all metrics for a given (algorithm, level, sample) combination.
 
     def __init__(
         self,
@@ -55,15 +48,8 @@ class MetricsEngine:
         measurement: KTCMeasurement,
         overwrite: bool = False,
     ) -> dict:
-        """Compute (or load from cache) all metrics for one measurement.
+        # Compute (or load from cache) all metrics for one measurement.
 
-        Args:
-            measurement: Loaded KTC2023 measurement.
-            overwrite: If True, recompute even if a cached result exists.
-
-        Returns:
-            Dict of metric_name → float value.
-        """
         alg = self.adapter.name
         level = measurement.level
         sample = measurement.sample
@@ -88,14 +74,7 @@ class MetricsEngine:
         reconstruction: np.ndarray,
         runtime: float,
     ) -> dict:
-        """Compute the full metric battery given a pre-computed reconstruction.
-
-        Used by the batch benchmark path where reconstruct_level() already ran
-        the algorithm — avoids calling the adapter a second time.
-
-        Covers all 14 README metrics plus per-class Dice and measurement-domain
-        scalars referenced by modules M2 and M4.
-        """
+        # Compute the full metric battery given a pre-computed reconstruction.
         gt = self._load_ground_truth(measurement.level, measurement.sample)
 
         # Image quality

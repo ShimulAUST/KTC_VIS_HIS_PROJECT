@@ -1,16 +1,4 @@
 """Backfill HDF5 cache with every M3 metric and emit a per-algorithm metrics log.
-
-No docker / no algorithm re-runs: every reconstruction is read from the
-existing ``data/cache/results.h5`` and the full metric battery (image quality,
-shape, class, measurement-domain, runtime) is recomputed via
-``MetricsEngine._compute_metrics_from_reconstruction``. Recomputed values are
-written back to the same HDF5 file so the dashboard reads them instantly.
-
-The script also emits ``data/cache/metrics_log.md`` — one section per
-algorithm, structured like the existing ``runtime_log.md`` so the two logs sit
-side-by-side. Every metric row reports per-(level, sample) values plus level
-means and an overall mean.
-
 Usage:
     python scripts/backfill_metrics_log.py            # rewrite all 84 entries
     python scripts/backfill_metrics_log.py --dry-run  # report only, don't touch
@@ -102,11 +90,8 @@ def _recompute_one(
 
 
 def backfill(dry_run: bool = False) -> dict[str, dict[tuple[int, str], dict]]:
-    """Recompute metrics for every (alg, level, sample) and (optionally) persist.
-
-    Returns:
-        Nested mapping ``results[alg][(level, sample)] = metrics_dict``.
-    """
+    #Recompute metrics for every (alg, level, sample) and (optionally) persist.
+    
     loader = KTCDataLoader(ROOT / "data" / "raw" / "ktc2023")
     engine = MetricsEngine(_NoopAdapter(), cache_path=CACHE_PATH)
     results: dict[str, dict[tuple[int, str], dict]] = {a: {} for a in ALGS}
@@ -150,7 +135,7 @@ def _metric_table(
     spec: str,
     higher_is_better: bool,
 ) -> str:
-    """Render one metric's L1–L7 × sample-A–D table."""
+    #Render one metric's L1–L7 × sample-A–D table.
     arrow = "↑" if higher_is_better else "↓"
     width = max(len(label), 8) + 1
     out: list[str] = []

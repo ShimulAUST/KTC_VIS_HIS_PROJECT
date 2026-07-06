@@ -1,22 +1,4 @@
-"""Measure PNPE2E reconstruction runtime per level and patch it into the HDF5 cache.
-
-Mirrors the manual docker invocation (CPU mode via map_location monkey-patch):
-
-    docker run --rm -v "$PWD:/workspace" -w /workspace/ktc_vis/external/KTC2023_PNPE2E \
-        ktc2023-pnpe2e \
-        bash -lc "mkdir -p <out> && python -c \"<load-on-cpu shim>; from main import main; main('TrainingData', '<out>', <N>)\""
-
-For each level the script:
-  1. Times the docker run with time.perf_counter().
-  2. Detects which samples the container wrote.
-  3. Writes runtime = elapsed / num_samples into
-     results/pnpe2e/<level>/<sample>/runtime in the HDF5 cache.
-
-Usage:
-    python scripts/benchmark_runtime_pnpe2e.py                  # levels 1-7
-    python scripts/benchmark_runtime_pnpe2e.py --levels 1 2     # only L1, L2
-    python scripts/benchmark_runtime_pnpe2e.py --dry-run        # print commands, don't run
-"""
+#Measure PNPE2E reconstruction runtime per level and patch it into the HDF5 cache.
 
 from __future__ import annotations
 
@@ -79,8 +61,7 @@ def _docker_cmd(level: int) -> list[str]:
 
 
 def _docker_cmd_single_sample(level: int, host_training_dir: Path) -> list[str]:
-    """Docker command for one sample: mount a one-file TrainingData dir as /tmp/td_one
-    and ask main() to read from it."""
+    #Docker command for one sample: mount a one-file TrainingData dir as /tmp/td_one
     return [
         "docker", "run", "--rm",
         "-v", f"{_PROJECT_ROOT}:/workspace",

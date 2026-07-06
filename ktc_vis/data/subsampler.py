@@ -1,4 +1,4 @@
-"""Electrode subsampling per KTC2023 difficulty level. Owner: Muzammal."""
+# Electrode subsampling per KTC2023 difficulty level.
 
 from __future__ import annotations
 
@@ -32,40 +32,17 @@ LEVEL_SPECS: dict[int, dict[str, int]] = {
 
 
 def subsample_electrodes(level: int) -> list[int]:
-    """Return the 0-based electrode indices used at the given difficulty level.
+    # Return the 0-based electrode indices used at the given difficulty level.
 
-    Args:
-        level: KTC2023 difficulty level, 1–7.
-
-    Returns:
-        List of 0-based electrode indices matching KTC2023 paper Table 1.
-
-    Raises:
-        ValueError: If level is outside the valid range.
-    """
     if level not in _ELECTRODE_INDICES:
         raise ValueError(f"level must be 1–7, got {level}")
     return _ELECTRODE_INDICES[level]
 
 
 def subsample_measurement(measurement: KTCMeasurement, level: int) -> KTCMeasurement:
-    """Return a copy of ``measurement`` reduced to the electrodes of ``level``.
+    # Return a copy of ``measurement`` reduced to the electrodes of ``level``.
 
-    Applies two filters:
-      1. Drops **injection rows** whose nonzero current electrodes are not all
-         within the active electrode set (an injection that touches a removed
-         electrode is invalid at this level).
-      2. Drops **voltage columns** (per the measurement pattern ``Mpat``) whose
-         non-zero entries are not all within the active set.
 
-    Args:
-        measurement: Level-1 measurement (32 electrodes). Must carry an
-            ``mpat`` attribute attached by the loader.
-        level: Target difficulty level, 1–7.
-
-    Returns:
-        New :class:`KTCMeasurement` with reduced matrices and ``level`` set.
-    """
     if level == measurement.level or level == 1:
         return measurement
 

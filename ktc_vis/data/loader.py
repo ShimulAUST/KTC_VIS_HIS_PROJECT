@@ -1,15 +1,13 @@
-"""KTC2023 dataset loader. Owner: Muzammal.
+"""KTC2023 dataset loader.
 
 Reads the canonical staged dataset under ``data/raw/ktc2023/``:
 
     measurements/data{1..4}.mat   — Level-1 measurement (Inj, Mpat, Uel)
     measurements/ref.mat          — empty-tank reference (Injref, Mpat, Uelref)
     ground_truth/true{1..4}.mat   — segmentation (key: truth, 256×256 uint8)
-
-Only Level 1 is stored on disk (32 electrodes, full protocol). Higher levels
-are derived at load time via electrode subsampling.
 """
 
+from ast import Load
 from pathlib import Path
 
 import numpy as np
@@ -37,14 +35,6 @@ EXPECTED_MEASUREMENTS = {
 
 
 class KTCDataLoader:
-    """Loads KTC2023 .mat files into :class:`KTCMeasurement` dataclasses.
-
-    Expected directory layout under ``raw_dir``::
-
-        measurements/data{1..4}.mat   — measurement (Inj, Mpat, Uel)
-        measurements/ref.mat          — empty-tank reference
-        ground_truth/true{1..4}.mat   — segmentation (key: truth, 256×256 uint8)
-    """
 
     def __init__(self, raw_dir: str | Path = _DEFAULT_RAW_DIR) -> None:
         self.raw_dir = Path(raw_dir)
@@ -113,7 +103,7 @@ class KTCDataLoader:
 
     @staticmethod
     def _load_mat(path: Path) -> dict:
-        """Load a .mat file, raising :class:`FileNotFoundError` with guidance."""
+        #Load a .mat file, raising :class:`FileNotFoundError` with guidance.
         if not path.exists():
             raise FileNotFoundError(
                 f"KTC2023 data file not found: {path}\n"

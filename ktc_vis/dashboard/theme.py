@@ -1,8 +1,4 @@
-"""Shared design tokens for the dashboard UI.
-
-Centralises colors, spacing, and reusable style dictionaries so every
-module renders with a consistent look.
-"""
+# Shared design tokens for the dashboard UI.
 
 from __future__ import annotations
 
