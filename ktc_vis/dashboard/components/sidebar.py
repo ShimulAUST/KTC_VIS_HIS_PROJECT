@@ -1,12 +1,4 @@
-"""Shared sidebar controls. Owner: Asmita Bhuva.
-
-Modernised dark-theme sidebar with sectioned cards for algorithm, level,
-and sample selectors. IDs are preserved so existing module callbacks
-continue to work unchanged:
-    ``sidebar-algorithm-dropdown``
-    ``sidebar-level-slider``
-    ``sidebar-sample-radio``
-"""
+# Shared sidebar controls. 
 
 from __future__ import annotations
 
@@ -37,7 +29,7 @@ _SAMPLES = [
 
 
 def build_sidebar() -> html.Div:
-    """Return the shared sidebar with algorithm, level, and sample selectors."""
+    # Return the shared sidebar with algorithm, level, and sample selectors.
     return html.Div(
         id="sidebar",
         children=[

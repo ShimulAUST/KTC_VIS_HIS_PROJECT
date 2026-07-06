@@ -1,16 +1,4 @@
-"""Measure CUQI8 reconstruction runtime per level and patch it into the HDF5 cache.
-
-Runs ONE sample per container to minimise peak RAM usage (CUQI8's FEM solver
-is memory-heavy and OOM-kills when all samples run together on Mac).
-
-Usage:
-    python scripts/benchmark_runtime_cuqi8.py                   # levels 1-7, all samples
-    python scripts/benchmark_runtime_cuqi8.py --levels 1 2      # only L1, L2
-    python scripts/benchmark_runtime_cuqi8.py --samples a b     # only samples A, B
-    python scripts/benchmark_runtime_cuqi8.py --memory 10g      # set a RAM cap (default: unlimited)
-    python scripts/benchmark_runtime_cuqi8.py --dry-run         # print commands, don't run
-"""
-
+#Measure CUQI8 reconstruction runtime per level and patch it into the HDF5 cache.
 from __future__ import annotations
 
 import argparse
@@ -37,7 +25,7 @@ _ALL_SAMPLES = ["a", "b", "c", "d"]
 
 
 def _write_training_data(training_dir: Path, level: int, sample: str) -> None:
-    """Write ref.mat + one data<idx>.mat for a single sample."""
+    #Write ref.mat + one data<idx>.mat for a single sample.
     if str(_PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(_PROJECT_ROOT))
     from ktc_vis.data.loader import KTCDataLoader

@@ -1,9 +1,4 @@
 """Regenerate data/cache/runtime_log.md from data/cache/results.h5.
-
-Reads runtime + provenance from the HDF5 cache and writes a human-readable
-Markdown table with per-algorithm notes. Safe to re-run after any change to
-the runtime values.
-
 Usage:
     python scripts/dump_runtime_log.py
 """

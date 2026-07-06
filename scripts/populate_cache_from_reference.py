@@ -3,11 +3,6 @@
 Instead of running Docker containers, this script reads the published
 reconstructions already in data/raw/ktc2023/reference_outputs/ and computes
 all metrics against the ground truth. Much faster than run_benchmark.py.
-
-Usage:
-    python scripts/populate_cache_from_reference.py           # all algorithms
-    python scripts/populate_cache_from_reference.py --algorithms abc1 cuqi8
-    python scripts/populate_cache_from_reference.py --overwrite
 """
 
 import argparse

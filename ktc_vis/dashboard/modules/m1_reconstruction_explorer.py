@@ -1,13 +1,7 @@
-"""Module 1: Reconstruction Explorer.
+#   Module 1: Reconstruction Explorer.
 
-Two-row layout (hero comparison + analysis row) for the currently
-selected ``(algorithm, level, sample)`` triple:
-
-    Row 1 (hero):     Ground Truth   |   Reconstruction
-    Row 2 (analysis): Segmentation   |   Error Overlay
-
-Backed by :class:`ReferenceOutputAdapter` (precomputed ``.mat`` files).
-"""
+#   Row 1 : Ground Truth   |   Reconstruction
+#   Row 2 : Segmentation   |   Error Overlay
 
 from __future__ import annotations
 
@@ -39,7 +33,7 @@ from ktc_vis.utils.figures import (
 
 logger = logging.getLogger(__name__)
 
-# Module-scoped singletons (cheap; no heavy state)
+# Module-scoped singletons
 _LOADER = KTCDataLoader()
 _ADAPTERS: dict[str, ReferenceOutputAdapter] = {}
 
@@ -50,7 +44,7 @@ def _get_adapter(name: str) -> ReferenceOutputAdapter:
     return _ADAPTERS[name]
 
 
-# ── IDs (prefix all M1 ids with ``m1-`` per coding standards) ──
+# IDs (prefix all M1 ids)
 _GT_ID = "m1-gt-image"
 _RECON_ID = "m1-recon-image"
 _SEG_ID = "m1-seg-image"
@@ -91,7 +85,7 @@ def layout() -> html.Div:
     )
 
 
-# ── Layout building blocks ────────────────────────────────────
+# ── Layout building blocks
 
 
 def _header() -> html.Div:
@@ -199,7 +193,7 @@ def _row_label(title: str, subtitle: str) -> html.Div:
 
 
 def _hero_row() -> html.Div:
-    """Primary comparison: GT and Reconstruction side-by-side (large)."""
+    # Primary comparison: GT and Reconstruction side-by-side (large).
     return html.Div(
         [
             _panel("Ground Truth", "Reference segmentation", _GT_ID,
@@ -216,7 +210,7 @@ def _hero_row() -> html.Div:
 
 
 def _analysis_row() -> html.Div:
-    """Secondary analysis: Segmentation + Error overlay (smaller)."""
+    # Secondary analysis: Segmentation + Error overlay (smaller).
     return html.Div(
         [
             _panel("Segmentation", "Algorithm output (3-class)", _SEG_ID,
@@ -378,7 +372,7 @@ def _banner(message: str, kind: str = "info") -> html.Div:
     )
 
 
-# ── Callbacks ────────────────────────────────────────────────
+# ── Callbacks
 
 
 def register_callbacks(app) -> None:  # noqa: ANN001

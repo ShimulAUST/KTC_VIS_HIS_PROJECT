@@ -1,17 +1,4 @@
-"""Glossary tooltips for the KTC-Vis dashboard.
-
-Provides a single source of truth (`GLOSSARY`) for every abbreviation, metric,
-and failure code used across the modules, plus three tiny helpers that wrap
-any Dash element in a native browser tooltip:
-
-* :func:`with_tooltip` — wrap an existing component, no visual change.
-* :func:`info_pill`    — render a small inline "i" badge for adding to titles.
-* :func:`glossary_term` — render the term itself as text with a dotted
-  underline that hints at hover-for-definition.
-
-Tooltips use the standard ``title`` HTML attribute, so they render natively in
-every browser without any callbacks, JS, or extra CSS.
-"""
+# Glossary tooltips for the KTC-Vis dashboard.
 
 from __future__ import annotations
 
@@ -203,11 +190,7 @@ def glossary_term(
     *,
     color: str | None = None,
 ) -> html.Span:
-    """Render ``label`` (or ``term`` if no label) as hover-for-definition text.
-
-    Adds a dotted underline so users see there is something to hover. Falls
-    back to plain text when the term is not in the glossary.
-    """
+    # Render label ( or term if no label) as hover-for-definition text.
     display = label if label is not None else term
     text = lookup(term)
     if not text:

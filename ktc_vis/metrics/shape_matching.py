@@ -1,20 +1,14 @@
-"""Shape matching metrics. Owner: Muzammal."""
+# Shape matching metrics.
+
+from turtle import distance
 
 import numpy as np
 from scipy.spatial.distance import directed_hausdorff
 
 
 def compute_hausdorff(pred: np.ndarray, gt: np.ndarray) -> float:
-    """Compute symmetric Hausdorff distance between foreground boundaries.
-
-    Args:
-        pred: 256×256 uint8 array with values in {0, 1, 2}.
-        gt:   256×256 uint8 array with values in {0, 1, 2}.
-
-    Returns:
-        Hausdorff distance in pixels. Lower is better.
-        Returns 0.0 if both masks are empty.
-    """
+    # Compute symmetric Hausdorff distance between foreground boundaries.
+    
     pred_pts = np.argwhere(pred > 0)
     gt_pts = np.argwhere(gt > 0)
 
@@ -29,15 +23,8 @@ def compute_hausdorff(pred: np.ndarray, gt: np.ndarray) -> float:
 
 
 def compute_position_error(pred: np.ndarray, gt: np.ndarray) -> float:
-    """Compute centroid offset between predicted and ground-truth foreground.
+    # Compute centroid offset between predicted and ground-truth foreground.
 
-    Args:
-        pred: 256×256 uint8 array.
-        gt:   256×256 uint8 array.
-
-    Returns:
-        Euclidean distance between centroids in pixels. Lower is better.
-    """
     pred_pts = np.argwhere(pred > 0)
     gt_pts = np.argwhere(gt > 0)
 
@@ -50,18 +37,9 @@ def compute_position_error(pred: np.ndarray, gt: np.ndarray) -> float:
 
 
 def compute_resolution(pred: np.ndarray, gt: np.ndarray) -> float:
-    """Estimate the smallest detected inclusion diameter in pixels.
-
-    Approximated as the diameter of the smallest connected foreground region
-    that appears in both pred and gt (rough estimate via equivalent disk).
-
-    Args:
-        pred: 256×256 uint8 array.
-        gt:   256×256 uint8 array.
-
-    Returns:
-        Estimated diameter in pixels. Lower means finer resolution.
-    """
+    # Estimate the smallest detected inclusion diameter in pixels.
+    # Returns: Estimated diameter in pixels. Lower means finer resolution.
+    
     from skimage.measure import label, regionprops
 
     overlap = np.logical_and(pred > 0, gt > 0).astype(np.uint8)

@@ -1,15 +1,10 @@
 """Module 5: Failure Autopsy.
 
-Ranks the worst-performing ``(algorithm, level, sample)`` cases by SSIM and,
-for the case selected via the sidebar, exposes four diagnostic panels:
-
+Ranks the worst-performing (algorithm, level, sample)
     1. Spatial SSIM heatmap        — which pixels drove the score down
     2. 3×3 confusion matrix        — class-level misclassification pattern
     3. Boundary error polar plot   — angular distribution of prediction errors
     4. Measurement residual polar  — per-injection inclusion energy
-
-A failure-type badge (A–E) is auto-assigned from the diagnostic signals.
-Clicking a row in the ranked list snaps the shared sidebar to that case.
 """
 
 from __future__ import annotations
@@ -66,7 +61,7 @@ _LABEL = {"abc1": "ABC1", "cuqi8": "CUQI8", "pnpe2e": "PNPE2E"}
 _ALG_COLOR = {"abc1": "#5b8def", "cuqi8": "#e85d75", "pnpe2e": "#f4c870"}
 _CLASS_LABEL = ["water", "resistive", "conductive"]
 
-# ── Failure taxonomy (per IMPLEMENTATION_GUIDE.md §3.3 & docs) ───────────────
+# ── Failure taxonomy (per IMPLEMENTATION_GUIDE.md 3.3 & docs)
 _FAILURE_TYPES = {
     "A": {
         "name": "Ghost inclusion",
@@ -161,9 +156,7 @@ def layout() -> html.Div:
 
 
 def register_callbacks(app) -> None:  # noqa: ANN001
-    """Wire ranking, sidebar navigation, and diagnostic panels."""
-
-    # ── Build (or rebuild) the ranking list when filters change ──────────────
+    # Wire ranking, sidebar navigation, and diagnostic panels.
     @app.callback(
         Output(_RANKING_ID, "children"),
         Output(_DATA_STORE_ID, "data"),
@@ -770,7 +763,7 @@ def _failure_legend() -> html.Div:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _reading_guide_card() -> html.Div:
-    """Static workflow strip explaining what each of the 4 graphs answers."""
+    # Static workflow strip explaining what each of the 4 graphs answers.
     steps = [
         ("1", "Spatial SSIM", "WHERE on the image did the failure happen?",
          ACCENT_SOFT),
@@ -859,7 +852,7 @@ def _interpretation_placeholder(message: str = "Select a case to see the reading
 
 
 def _interpretation_block(label: str, body: str, *, accent: str = ACCENT) -> html.Div:
-    """Compact 'reading' footer with a coloured label and one-sentence body."""
+    # Compact 'reading' footer with a coloured label and one-sentence body.
     return html.Div(
         [
             html.Span(
@@ -884,7 +877,7 @@ def _interpretation_block(label: str, body: str, *, accent: str = ACCENT) -> htm
 
 
 def _spatial_interpretation(ssim_map: np.ndarray, ssim_score: float | None) -> html.Div:
-    """Plain-English reading of the spatial SSIM heatmap."""
+    # Plain-English reading of the spatial SSIM heatmap.
     arr = np.asarray(ssim_map, dtype=float)
     if arr.size == 0:
         return _interpretation_placeholder("Spatial SSIM map is empty.")
@@ -929,7 +922,7 @@ def _spatial_interpretation(ssim_map: np.ndarray, ssim_score: float | None) -> h
 
 
 def _confusion_interpretation(cm: np.ndarray) -> html.Div:
-    """Identify the dominant off-diagonal cell and name the failure mode."""
+    # Identify the dominant off-diagonal cell and name the failure mode.
     arr = np.asarray(cm, dtype=float)
     if arr.shape != (3, 3):
         return _interpretation_placeholder("Confusion matrix has unexpected shape.")
@@ -972,7 +965,7 @@ def _confusion_interpretation(cm: np.ndarray) -> html.Div:
 def _boundary_interpretation(
     pred: np.ndarray, gt: np.ndarray, level: int,
 ) -> html.Div:
-    """Compare error-angle distribution against the removed-electrode arc."""
+    # Compare error-angle distribution against the removed-electrode arc.
     pred_arr = np.asarray(pred)
     gt_arr = np.asarray(gt)
     err_mask = pred_arr != gt_arr
@@ -1030,7 +1023,7 @@ def _boundary_interpretation(
 
 
 def _measurement_interpretation(per_inj: np.ndarray | None) -> html.Div:
-    """Describe how much of the measurement set is starved of inclusion signal."""
+    # Describe how much of the measurement set is starved of inclusion signal.
     if per_inj is None:
         return _interpretation_placeholder("Could not load raw measurements.")
 
@@ -1388,7 +1381,7 @@ def _quick_metrics_placeholder(msg: str = "—") -> html.Div:
 
 
 def _quick_metrics_view(metrics: dict) -> html.Div:
-    """3×2 grid of the most actionable cached numbers."""
+    # 3×2 grid of the most actionable cached numbers.
     items = [
         ("IoU water", metrics.get("iou_water"), "{:.2f}", None),
         ("IoU resistive", metrics.get("iou_resistive"), "{:.2f}", None),
@@ -1456,7 +1449,7 @@ def _signal_breakdown_view(
     signal_scores: dict[str, float],
     winning_code: str,
 ) -> html.Div:
-    """Mini horizontal bars for the per-code scores from ``_classify_failure``."""
+    # Mini horizontal bars for the per-code scores from ``_classify_failure``.
     if not signal_scores:
         return _signal_breakdown_placeholder("No signals available")
 
@@ -1559,7 +1552,7 @@ def _banner(text: str, kind: str = "info") -> html.Div:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _load_all_cases(cache_path: Path = _CACHE_PATH) -> list[dict]:
-    """Return one record per cached (alg, level, sample) with SSIM and badge."""
+    # Return one record per cached (alg, level, sample) with SSIM and badge.
     records: list[dict] = []
     for alg in _ALGORITHMS:
         for lv in _LEVELS:
@@ -1610,13 +1603,12 @@ def _classify_failure(
     algorithm: str,
 ) -> tuple[str, dict[str, float]]:
     """Assign a failure type (A–E) from confusion-matrix signals.
-
     Heuristics:
-        A · Ghost            — FP-dominant (pred non-water vs GT water)
-        B · Missing          — FN-dominant (pred water vs GT inclusion)
-        C · Class flip       — resistive ↔ conductive swap
-        D · Boundary erosion — inclusion detected but the footprint shrinks
-        E · Mask suppression — PNPE2E with FN-heavy + balanced inclusion confusion
+        A · Ghost           
+        B · Missing         
+        C · Class flip      
+        D · Boundary erosion 
+        E · Mask suppression
     """
     fp = float(cm[0, 1] + cm[0, 2])
     fn = float(cm[1, 0] + cm[2, 0])
@@ -1669,7 +1661,7 @@ def _classify_failure(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _spatial_ssim_figure(ssim_map: np.ndarray) -> go.Figure:
-    """Heatmap of local SSIM. Red = bad pixels driving the score down."""
+    # Heatmap of local SSIM. Red = bad pixels driving the score down.
     fig = go.Figure(
         go.Heatmap(
             z=ssim_map,
@@ -1696,7 +1688,7 @@ def _spatial_ssim_figure(ssim_map: np.ndarray) -> go.Figure:
 
 
 def _confusion_figure(cm: np.ndarray) -> go.Figure:
-    """3×3 confusion matrix annotated with percentages."""
+    # 3×3 confusion matrix annotated with percentages.
     text = [[f"{cm[i, j] * 100:.1f}%" for j in range(3)] for i in range(3)]
     fig = go.Figure(
         go.Heatmap(
@@ -1766,8 +1758,8 @@ def _boundary_radial_figure(
     centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
 
     # Electrode geometry: 32 positions equally spaced around the rim.
-    # The current level keeps `active` (drawn green); the rest are removed
-    # (drawn dim gray so the user can see the measurement gaps).
+    # The current level keeps `active` (drawn green)
+    # (drawn dim gray ).
     active = set(subsample_electrodes(level))
     all_angles = [(360.0 * idx / 32.0) % 360 for idx in range(32)]
     active_angles  = [a for i, a in enumerate(all_angles) if i in active]
@@ -1844,12 +1836,7 @@ def _measurement_residual_figure(
     pred: np.ndarray,
     gt: np.ndarray,
 ) -> go.Figure:
-    """Per-injection inclusion-vs-reference voltage energy.
-
-    For each injection, plots ||V_meas - V_ref|| (RMS) — the larger the bar,
-    the more the inclusion perturbs that injection.  Bars below the dashed
-    threshold are uninformative measurements (data-side limitation).
-    """
+    # Per-injection inclusion-vs-reference voltage energy.
     try:
         measurement = _LOADER.load(level=level, sample=sample)
         per_inj = _per_injection_perturbation(measurement)
@@ -1871,8 +1858,6 @@ def _measurement_residual_figure(
 
     # Weak-signal threshold = 25th percentile of per-injection perturbation.
     # This is robust across levels: at L1 ref subtraction is exact; at L2-L7
-    # the cached ref.mat is sliced to match the subsampled shape (approximate),
-    # so a percentile cutoff stays meaningful even when raw magnitudes shift.
     if n:
         threshold = float(np.percentile(per_inj, 25))
     else:

@@ -1,4 +1,4 @@
-"""Dashboard top-level layout. Owner: Asmita Bhuva."""
+# Dashboard top-level layout.
 
 from dash import dcc, html
 
@@ -24,7 +24,7 @@ _TABS = [
 
 
 def create_layout() -> html.Div:
-    """Return the full app layout: sidebar + tabbed module area."""
+    # Return the full app layout: sidebar + tabbed module area.
     tab_style = {
         "backgroundColor": SURFACE,
         "color": MUTED,
@@ -83,6 +83,6 @@ def create_layout() -> html.Div:
 
 
 def register_all_callbacks(app) -> None:  # noqa: ANN001
-    """Register callbacks from all modules."""
+    # Register callbacks from all modules.
     for _, module in _TABS:
         module.register_callbacks(app)

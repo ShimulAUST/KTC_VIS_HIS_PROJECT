@@ -1,23 +1,4 @@
-"""Measure ABC1 reconstruction runtime per level and patch it into the HDF5 cache.
-
-Mirrors the manual docker invocation:
-
-    docker run --rm -v "$PWD:/workspace" -w /workspace/ktc_vis/external/KTC2023_ABC \
-        ktc2023-abc-python \
-        python main_python.py TrainingData \
-        /workspace/data/raw/ktc2023/reference_outputs/abc1/level<N> <N>
-
-For each level the script:
-  1. Times the docker run with time.perf_counter().
-  2. Detects which samples the container wrote (data1.mat … data4.mat).
-  3. Writes runtime = elapsed / num_samples into
-     results/abc1/<level>/<sample>/runtime in the HDF5 cache.
-
-Usage:
-    python scripts/benchmark_runtime_abc1.py                  # levels 1-7
-    python scripts/benchmark_runtime_abc1.py --levels 1 2     # only L1, L2
-    python scripts/benchmark_runtime_abc1.py --dry-run        # print commands, don't run
-"""
+#Measure ABC1 reconstruction runtime per level and patch it into the HDF5 cache.
 
 from __future__ import annotations
 
@@ -59,6 +40,7 @@ def _docker_cmd(level: int) -> list[str]:
 def _docker_cmd_single_sample(level: int, sample_idx: int, host_training_dir: Path) -> list[str]:
     """Docker command that processes only ONE data<idx>.mat by mounting a temp
     TrainingData directory containing just that sample + ref.mat."""
+
     out_dir = f"{_OUTPUT_ROOT_IN_CONTAINER}/level{level}"
     return [
         "docker", "run", "--rm",
@@ -99,7 +81,7 @@ def _patch_runtime(level: int, samples: list[str], per_sample_runtime: float) ->
 
 
 def _patch_one(level: int, sample: str, runtime_s: float) -> bool:
-    """Write a single (level, sample) runtime to the cache. Returns True on success."""
+    #Write a single (level, sample) runtime to the cache. Returns True on success.
     if not _CACHE_PATH.exists():
         print(f"  ! cache not found: {_CACHE_PATH} — skipping write")
         return False
@@ -189,7 +171,7 @@ def main() -> None:
 
 
 def _run_per_sample(args) -> None:
-    """Per-sample mode: one container per (level, sample), recording real per-sample timing."""
+    #Per-sample mode: one container per (level, sample), recording real per-sample timing.
     print(f"ABC1 runtime benchmark — image: {_IMAGE}  [PER-SAMPLE mode]")
     print(f"Cache: {_CACHE_PATH}")
     print(f"Source data: {_TRAINING_DATA_HOST}")
