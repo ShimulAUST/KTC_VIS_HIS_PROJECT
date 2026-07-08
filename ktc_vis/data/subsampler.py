@@ -42,7 +42,6 @@ def subsample_electrodes(level: int) -> list[int]:
 def subsample_measurement(measurement: KTCMeasurement, level: int) -> KTCMeasurement:
     # Return a copy of ``measurement`` reduced to the electrodes of ``level``.
 
-
     if level == measurement.level or level == 1:
         return measurement
 

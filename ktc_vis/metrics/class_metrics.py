@@ -7,7 +7,7 @@ CLASSES = {0: "water", 1: "resistive", 2: "conductive"}
 
 def compute_per_class_iou(pred: np.ndarray, gt: np.ndarray) -> dict[str, float]:
     # Compute per-class Intersection over Union.
-    # Returns: Dict with keys "water", "resistive", "conductive" → IoU float in [0, 1]. 
+    # Returns: Dict with keys "water", "resistive", "conductive" → IoU float in [0, 1].
     # Classes absent from both pred and gt are returned as NaN.
     result = {}
     for cls_id, cls_name in CLASSES.items():
