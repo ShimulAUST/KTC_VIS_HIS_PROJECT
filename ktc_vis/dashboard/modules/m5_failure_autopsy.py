@@ -1604,10 +1604,10 @@ def _classify_failure(
 ) -> tuple[str, dict[str, float]]:
     """Assign a failure type (A–E) from confusion-matrix signals.
     Heuristics:
-        A · Ghost           
-        B · Missing         
-        C · Class flip      
-        D · Boundary erosion 
+        A · Ghost
+        B · Missing
+        C · Class flip
+        D · Boundary erosion
         E · Mask suppression
     """
     fp = float(cm[0, 1] + cm[0, 2])

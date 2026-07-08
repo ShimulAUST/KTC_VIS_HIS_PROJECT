@@ -1,4 +1,4 @@
-# Shared sidebar controls. 
+# Shared sidebar controls.
 
 from __future__ import annotations
 

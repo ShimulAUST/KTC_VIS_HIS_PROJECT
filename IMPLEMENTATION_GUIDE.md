@@ -1,7 +1,5 @@
 # KTC-Vis — Implementation Guide
 
-> Authoritative reference for the KTC-Vis codebase as it exists today: repository layout, data flow, the six dashboard modules and every graph they render, the metrics engine, and the supporting scripts/infra. This replaces the original pre-build task-assignment plan — read this before touching the code.
-
 ---
 
 ## 0. Course & Team

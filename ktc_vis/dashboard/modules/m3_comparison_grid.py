@@ -38,13 +38,13 @@ from ktc_vis.utils.figures import (
 
 logger = logging.getLogger(__name__)
 
-# ── Project paths 
+# ── Project paths
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
 _CACHE_PATH = _PROJECT_ROOT / "data" / "cache" / "results.h5"
 _SAMPLE_MAP = {"a": 1, "b": 2, "c": 3, "d": 4}
 
-# ── Algorithm registry 
+# ── Algorithm registry
 _ALGORITHMS: list[str] = ["abc1", "cuqi8", "pnpe2e"]
 _ALG_COLORS: dict[str, str] = {
     "abc1": "#5b8def",   # blue
@@ -52,7 +52,7 @@ _ALG_COLORS: dict[str, str] = {
     "pnpe2e": "#f4c870",   # gold
 }
 
-# ── Singletons 
+# ── Singletons
 _LOADER = KTCDataLoader()
 _ADAPTERS: dict[str, ReferenceOutputAdapter] = {}
 
@@ -63,7 +63,7 @@ def _get_adapter(name: str) -> ReferenceOutputAdapter:
     return _ADAPTERS[name]
 
 
-# ── IDs (all prefixed with ``m3-``) 
+# ── IDs (all prefixed with ``m3-``)
 _CHIPS_ID = "m3-chips"
 _BANNER_ID = "m3-banner"
 
@@ -110,7 +110,7 @@ _VOLTAGE_HINT_STYLE_FULL = {
     "zIndex": 10000,
 }
 
-# ── Shared style helpers 
+# ── Shared style helpers
 _PANEL_HDR = {
     "display": "flex",
     "alignItems": "center",
@@ -118,7 +118,6 @@ _PANEL_HDR = {
     "padding": "10px 14px",
     "borderBottom": f"1px solid {BORDER}",
 }
-
 
 
 # Layout
@@ -133,7 +132,7 @@ def layout() -> html.Div:
                      style={"display": "flex", "flexWrap": "wrap", "gap": "8px"}),
             html.Div(id=_BANNER_ID),
 
-            # ── Row 1: reconstructions 
+            # ── Row 1: reconstructions
             _section_label(
                 "Algorithm Reconstructions",
                 "All three algorithms at the same level and sample — select any "
@@ -141,7 +140,7 @@ def layout() -> html.Div:
             ),
             _recon_grid(),
 
-            # ── Row 2: pairwise differences 
+            # ── Row 2: pairwise differences
             _section_label(
                 "Pairwise Pixel Differences",
                 "Diverging map: purple = A classifies higher, gold = B classifies higher, "
@@ -149,7 +148,7 @@ def layout() -> html.Div:
             ),
             _diff_grid(),
 
-            # ── Row 3: voltage chart + metrics scorecard 
+            # ── Row 3: voltage chart + metrics scorecard
             _section_label(
                 "Measurement Data & Metrics",
                 "Left: shows how much voltage was measured at each electrode channel — "
@@ -168,7 +167,7 @@ def layout() -> html.Div:
     )
 
 
-# ── Section building blocks 
+# ── Section building blocks
 def _header() -> html.Div:
     return html.Div(
         [
@@ -531,6 +530,7 @@ def _banner(message: str, kind: str = "info") -> html.Div:
         "color": fg, "padding": "10px 14px",
         "borderRadius": "10px", "fontSize": "12.5px",
     })
+
 
 # Figure builders
 
@@ -1085,7 +1085,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     def _update_all(level: int, sample: str, selected_alg: str):
         level = int(level)
 
-        # ── 1. Load measurement (needed for voltage chart) 
+        # ── 1. Load measurement (needed for voltage chart)
         measurement = None
         banner = None
         try:
@@ -1097,14 +1097,14 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             logger.exception("M3 measurement load failed")
             banner = _banner(f"Measurement load error: {exc}", "warn")
 
-        # ── 2. Load all three reconstructions 
+        # ── 2. Load all three reconstructions
         recons: dict[str, np.ndarray | None] = {
             alg: _load_reconstruction(alg, level, sample)
             for alg in _ALGORITHMS
         }
         n_loaded = sum(1 for v in recons.values() if v is not None)
 
-        # ── 3. Build reconstruction figures 
+        # ── 3. Build reconstruction figures
         recon_figs = []
         for alg in _ALGORITHMS:
             r = recons[alg]
@@ -1115,7 +1115,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     empty_figure(f"No data for {alg.upper()}\nRun benchmark")
                 )
 
-        # ── 4. Build pairwise difference figures 
+        # ── 4. Build pairwise difference figures
         diff_figs = []
         for alg_a, alg_b in _DIFF_PAIRS:
             ra = recons[alg_a]
@@ -1130,7 +1130,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     empty_figure(f"Missing: {missing.upper()}")
                 )
 
-        # ── 5. Voltage figure 
+        # ── 5. Voltage figure
         if measurement is not None:
             try:
                 voltage_fig = _voltage_figure(measurement)
@@ -1140,10 +1140,10 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         else:
             voltage_fig = empty_figure("Measurement data unavailable")
 
-        # ── 6. Scorecard 
+        # ── 6. Scorecard
         scorecard = _scorecard_children(level, sample, selected_alg)
 
-        # ── 7. Chips 
+        # ── 7. Chips
         chips = [
             _chip("level", f"L{level}", accent=WARN),
             _chip("sample", sample.upper(), accent="#cfe0ff"),
