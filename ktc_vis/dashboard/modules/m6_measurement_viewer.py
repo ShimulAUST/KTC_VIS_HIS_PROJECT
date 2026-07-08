@@ -51,7 +51,7 @@ _REF_MAT = Path(_LOADER.measurements_dir) / "ref.mat"
 
 _N_TANK_ELECTRODES = 32
 
-# ── IDs ───────────────────────────────────────────────────────
+# component IDs
 _CURRENT_ID          = "m6-current-polar"
 _VOLTAGE_POLAR_ID    = "m6-voltage-polar"
 _VOLTAGE_DIFF_ID     = "m6-voltage-diff"
@@ -92,9 +92,7 @@ _PANEL_HEADER_STYLE = {
 }
 
 
-# ── Data access ───────────────────────────────────────────────
-
-
+# loads and caches measurement data for a given level/sample pair
 @lru_cache(maxsize=32)
 def _load_measurement(level: int, sample: str) -> KTCMeasurement:
     return _LOADER.load(level=level, sample=sample)
@@ -103,6 +101,7 @@ def _load_measurement(level: int, sample: str) -> KTCMeasurement:
 _REF_CACHE: dict[int, KTCMeasurement] = {}
 
 
+# loads the empty-tank reference from ref.mat, subsamples it to the requested level, and caches the result
 def _load_reference(level: int) -> KTCMeasurement | None:
     if level in _REF_CACHE:
         return _REF_CACHE[level]
@@ -140,6 +139,7 @@ def _load_reference(level: int) -> KTCMeasurement | None:
     return measurement
 
 
+# replaces any NaN or Inf values with zero and flags whether the array needed cleaning
 def _sanitize(arr: np.ndarray) -> tuple[np.ndarray, bool]:
     arr = np.asarray(arr, dtype=np.float64)
     finite = np.isfinite(arr)
@@ -148,11 +148,13 @@ def _sanitize(arr: np.ndarray) -> tuple[np.ndarray, bool]:
     return np.where(finite, arr, 0.0), True
 
 
+# returns the list of active electrode indices and their corresponding angles around the tank
 def _electrode_angles(level: int) -> tuple[list[int], list[float]]:
     active = subsample_electrodes(level)
     return active, [(360.0 * e / _N_TANK_ELECTRODES) % 360 for e in active]
 
 
+# maps each measurement pair column to an angle on the tank circumference using the mpat matrix
 def _pair_angles(measurement: KTCMeasurement, level: int) -> list[float]:
     n_cols = measurement.voltage_matrix.shape[1]
     mpat   = measurement.__dict__.get("mpat")
@@ -171,9 +173,7 @@ def _pair_angles(measurement: KTCMeasurement, level: int) -> list[float]:
     return angles
 
 
-# ── Shared layouts ────────────────────────────────────────────
-
-
+# returns a Plotly layout dict for polar charts, with the dark background and optional legend
 def _polar_layout(title: str, legend: bool = True) -> dict:
     return dict(
         title=dict(text=title, x=0.5, font=dict(color="#ddd", size=13)),
@@ -197,6 +197,7 @@ def _polar_layout(title: str, legend: bool = True) -> dict:
     )
 
 
+# returns a Plotly layout dict for bar and line charts with shared axis and legend styling
 def _cartesian_layout(title: str, xtitle: str, ytitle: str) -> dict:
     axis = dict(
         gridcolor=_GRID, linecolor=_GRID, zerolinecolor="#3a3a55",
@@ -218,9 +219,7 @@ def _cartesian_layout(title: str, xtitle: str, ytitle: str) -> dict:
     )
 
 
-# ── Figure builders ───────────────────────────────────────────
-
-
+# builds the polar bar chart showing injected current for one step, with removed electrodes marked
 def current_polar_figure(
     measurement: KTCMeasurement, level: int, inj_idx: int
 ) -> go.Figure:
@@ -254,11 +253,12 @@ def current_polar_figure(
         ))
     n_inj = measurement.current_matrix.shape[0]
     fig.update_layout(**_polar_layout(
-        f"Injection {inj_idx + 1} / {n_inj} · current pattern"))
+        f"Injection {inj_idx + 1} of {n_inj}, current pattern"))
     fig.update_polars(radialaxis_range=[0, rmax * 1.25])
     return fig
 
 
+# overlays measured electrode voltages and the empty-tank reference on a polar chart
 def voltage_polar_figure(
     measurement: KTCMeasurement,
     reference: KTCMeasurement | None,
@@ -287,10 +287,11 @@ def voltage_polar_figure(
             name="empty-tank reference",
             hovertemplate="θ=%{theta:.0f}°<br>V_ref = %{r:.4f}<extra></extra>",
         ))
-    fig.update_layout(**_polar_layout(f"Injection {inj_idx + 1} · electrode voltages"))
+    fig.update_layout(**_polar_layout(f"Injection {inj_idx + 1}, electrode voltages"))
     return fig
 
 
+# bar chart of ΔV = V − V_ref for the selected injection, the direct input to reconstruction
 def voltage_diff_figure(
     measurement: KTCMeasurement,
     reference: KTCMeasurement | None,
@@ -313,16 +314,13 @@ def voltage_diff_figure(
         hovertemplate="pair %{x}<br>ΔV = %{y:.5f}<extra></extra>",
     ))
     fig.update_layout(**_cartesian_layout(
-        f"Injection {inj_idx + 1} · inclusion-induced voltage change",
+        f"Injection {inj_idx + 1}, voltage change from inclusion",
         "measurement pair", "ΔV"))
     return fig
 
 
-# ── Resistance — per injection ────────────────────────────────
-
-
 def resistance_bar_figure(measurement: KTCMeasurement, inj_idx: int) -> go.Figure:
-    """Bar chart of R per pair, green = positive, red = negative."""
+    """Bar chart of resistance per measurement pair for the selected injection. Green = positive, red = negative."""
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     r, _   = _sanitize(measurement.resistance_matrix[inj_idx])
@@ -335,7 +333,7 @@ def resistance_bar_figure(measurement: KTCMeasurement, inj_idx: int) -> go.Figur
     ))
     fig.add_hline(y=0, line=dict(color="#555", width=1, dash="dot"))
     fig.update_layout(**_cartesian_layout(
-        f"Injection {inj_idx + 1} · R per pair",
+        f"Injection {inj_idx + 1}, R per pair",
         "measurement pair", "R = V / I"))
     return fig
 
@@ -345,7 +343,7 @@ def resistance_delta_figure(
     reference: KTCMeasurement | None,
     inj_idx: int,
 ) -> go.Figure:
-    """ΔR = R − R_ref per pair — direct pre-reconstruction anomaly signal."""
+    """Bar chart of ΔR = R − R_ref per pair, the pre-reconstruction anomaly signal without baseline."""
     if reference is None or \
             reference.resistance_matrix.shape != measurement.resistance_matrix.shape:
         return empty_figure("Reference (ref.mat) unavailable")
@@ -362,7 +360,7 @@ def resistance_delta_figure(
     ))
     fig.add_hline(y=0, line=dict(color="#555", width=1, dash="dot"))
     fig.update_layout(**_cartesian_layout(
-        f"Injection {inj_idx + 1} · resistance difference ΔR",
+        f"Injection {inj_idx + 1}, resistance difference ΔR",
         "measurement pair", "ΔR = R − R_ref"))
     return fig
 
@@ -372,7 +370,7 @@ def snr_per_pair_figure(
     reference: KTCMeasurement | None,
     inj_idx: int,
 ) -> go.Figure:
-    """Signal-to-noise |ΔV|/|V_ref| per pair — higher = more informative pair."""
+    """Bar chart of |ΔV| / |V_ref| per pair showing how much information each pair carries about the inclusion."""
     if reference is None or \
             reference.voltage_matrix.shape != measurement.voltage_matrix.shape:
         return empty_figure("Reference (ref.mat) unavailable")
@@ -395,21 +393,13 @@ def snr_per_pair_figure(
         name="|ΔV| / |V_ref|",
     ))
     fig.update_layout(**_cartesian_layout(
-        f"Injection {inj_idx + 1} · signal-to-noise per pair",
+        f"Injection {inj_idx + 1}, signal-to-noise per pair",
         "measurement pair", "|ΔV| / |V_ref|"))
     return fig
 
 
-# ── Resistance — across injections ───────────────────────────
-
-
 def resistance_overlay_figure(measurement: KTCMeasurement, inj_idx: int) -> go.Figure:
-    """All injections as faint lines, selected one highlighted.
-
-    All background traces are merged into one None-separated Scatter so
-    Plotly handles a single object instead of up to 76 individual traces —
-    keeps the play animation smooth.
-    """
+    """All injections plotted as faint lines with the selected one highlighted in yellow. Uses a single None-separated trace to avoid Plotly overhead during animation."""
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _ = _sanitize(measurement.resistance_matrix)
@@ -442,13 +432,13 @@ def resistance_overlay_figure(measurement: KTCMeasurement, inj_idx: int) -> go.F
         hovertemplate="pair %{x}<br>R = %{y:.4f}<extra></extra>",
     ))
     fig.update_layout(**_cartesian_layout(
-        f"All injections · #{inj_idx + 1} highlighted",
+        f"All injections, #{inj_idx + 1} highlighted",
         "measurement pair", "R = V / I"))
     return fig
 
 
 def resistance_summary_figure(measurement: KTCMeasurement) -> go.Figure:
-    """Mean R per pair ±1 std — bright marker = high variability across injections."""
+    """Mean resistance per pair ±1 std over all injections. Marker colour encodes how much the pair varies across injection directions."""
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _  = _sanitize(measurement.resistance_matrix)
@@ -474,12 +464,9 @@ def resistance_summary_figure(measurement: KTCMeasurement) -> go.Figure:
         hovertemplate="pair %{x}<br>mean R = %{y:.4f}<extra></extra>",
     ))
     fig.update_layout(**_cartesian_layout(
-        "Mean R per pair · marker color = variability",
+        "Mean R per pair (marker color shows variability)",
         "measurement pair", "mean R = V / I"))
     return fig
-
-
-# ── Anomaly & stability ───────────────────────────────────────
 
 
 def anomaly_score_figure(
@@ -487,7 +474,7 @@ def anomaly_score_figure(
     reference: KTCMeasurement | None,
     inj_idx: int,
 ) -> go.Figure:
-    """Per-injection anomaly score Σ|ΔR| — taller bar = more inclusion influence."""
+    """Per-injection anomaly score (sum of |ΔR| over all pairs). Taller bar means that injection angle is more sensitive to the inclusion."""
     if reference is None or \
             reference.resistance_matrix.shape != measurement.resistance_matrix.shape:
         return empty_figure("Reference (ref.mat) unavailable")
@@ -503,13 +490,13 @@ def anomaly_score_figure(
         name="Σ|ΔR|",
     ))
     fig.update_layout(**_cartesian_layout(
-        f"Anomaly score per injection · #{inj_idx + 1} highlighted",
+        f"Anomaly score per injection, #{inj_idx + 1} highlighted",
         "injection", "Σ|ΔR|"))
     return fig
 
 
 def measurement_stability_figure(measurement: KTCMeasurement) -> go.Figure:
-    """Coefficient of variation per pair — red bars signal unstable measurements."""
+    """Coefficient of variation per pair, flagging unstable measurements in red at anything above twice the median."""
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _   = _sanitize(measurement.resistance_matrix)
@@ -531,20 +518,13 @@ def measurement_stability_figure(measurement: KTCMeasurement) -> go.Figure:
         annotation_font=dict(color=WARN, size=10),
     )
     fig.update_layout(**_cartesian_layout(
-        "Measurement stability · coefficient of variation per pair",
+        "Measurement stability: coefficient of variation per pair",
         "measurement pair", "CV = std / |mean|"))
     return fig
 
 
-# ── Electrode & coverage ──────────────────────────────────────
-
-
 def electrode_impedance_figure(measurement: KTCMeasurement, level: int) -> go.Figure:
-    """Mean |R| per electrode across all pairs it participates in.
-
-    Electrodes with unusually high mean |R| may have poor contact or high
-    contact impedance — they appear as red bars above the 2× median line.
-    """
+    """Mean |R| per electrode across every pair it participates in. Red bars above the 2x median threshold suggest poor contact or high impedance."""
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _   = _sanitize(measurement.resistance_matrix)
@@ -578,13 +558,13 @@ def electrode_impedance_figure(measurement: KTCMeasurement, level: int) -> go.Fi
         annotation_text="2× median", annotation_font=dict(color=WARN, size=10),
     )
     fig.update_layout(**_cartesian_layout(
-        "Electrode contact quality · mean |R| across all pairs",
+        "Electrode contact quality, mean |R| across all pairs",
         "electrode", "mean |R|"))
     return fig
 
 
 def level_coverage_figure(current_level: int, sample: str) -> go.Figure:
-    """Electrode count and measurement-pair count at each difficulty level 1–7."""
+    """Bar chart of active electrode counts across levels 1-7, with a secondary line for measurement pair counts."""
     levels      = list(range(1, 8))
     n_electrodes = [len(subsample_electrodes(lv)) for lv in levels]
     n_pairs: list[int | None] = []
@@ -613,7 +593,7 @@ def level_coverage_figure(current_level: int, sample: str) -> go.Figure:
         ))
 
     layout = _cartesian_layout(
-        f"Coverage per level · current = L{current_level}",
+        f"Coverage per level, currently at L{current_level}",
         "difficulty level", "active electrodes")
     axis = dict(gridcolor=_GRID, linecolor=_GRID, tickfont=dict(color=MUTED, size=10))
     layout["yaxis2"] = {
@@ -626,17 +606,10 @@ def level_coverage_figure(current_level: int, sample: str) -> go.Figure:
     return fig
 
 
-# ── Coverage polar ────────────────────────────────────────────
-
-
 def coverage_polar_figure(
     measurement: KTCMeasurement, level: int, inj_idx: int
 ) -> go.Figure:
-    """Polar showing electrode coverage + current injection source/sink highlighted.
-
-    Updates on every injection step so the user can watch the injection
-    pair rotate around the tank rim during play animation.
-    """
+    """Polar map of the electrode ring showing active vs. removed positions, source/sink for the current injection, and a sample of pair arcs."""
     active     = subsample_electrodes(level)
     active_set = set(active)
     removed    = [e for e in range(_N_TANK_ELECTRODES) if e not in active_set]
@@ -683,7 +656,7 @@ def coverage_polar_figure(
                         color="rgba(154,160,180,0.5)"),
             name=f"removed ({len(removed)})",
             text=[f"E{e + 1}" for e in removed],
-            hovertemplate="%{text} — removed<extra></extra>",
+            hovertemplate="%{text} (removed)<extra></extra>",
         ))
 
     # Source electrode(s) — bright red, larger
@@ -737,14 +710,12 @@ def coverage_polar_figure(
 
     n_inj = measurement.current_matrix.shape[0]
     fig.update_layout(**_polar_layout(
-        f"Inj {inj_idx + 1}/{n_inj} · red = source · blue = sink"))
+        f"Injection {inj_idx + 1} of {n_inj}: red = source, blue = sink"))
     fig.update_polars(radialaxis_range=[0, 1.35], radialaxis_visible=False)
     return fig
 
 
-# ── Layout ────────────────────────────────────────────────────
-
-
+# builds the full page layout: header, chips, injection controls, and all the panel rows
 def layout() -> html.Div:
     return html.Div(
         [
@@ -760,179 +731,173 @@ def layout() -> html.Div:
             dcc.Store(id=_PLAYING_ID, data=False),
             dcc.Download(id=_DOWNLOAD_ID),
 
-            # ── Current ──────────────────────────────────────
             _row_label("Current", "How charge is injected at each step"),
             html.Div(
                 [
                     _panel("Current Pattern",
-                           "Polar bar · red = source, blue = sink",
+                           "Red bars = source electrode, blue = sink",
                            _CURRENT_ID, badge="I", badge_color=DANGER, height=380,
                            interpretation=(
-                               "Polar bar chart of injected current for one step. "
-                               "Red bars (+) = source electrode, blue bars (−) = sink electrode; bar height = current magnitude in mA. "
-                               "Grey ✕ = electrode removed at this difficulty level. "
-                               "Step through all injections to confirm the source/sink pair sweeps the full tank — gaps at higher levels reveal angular blind spots."
+                               "This shows which electrodes are injecting current and how much. "
+                               "The tall red bars are where current enters (source) and the blue bars are where it exits (sink); bar height is the current magnitude in mA. "
+                               "Grey X marks are electrodes that aren't available at this difficulty level. "
+                               "Try stepping through all the injections. At higher levels you'll notice gaps where electrodes have been removed."
                            )),
                     _panel("Electrode Voltages",
                            "Measured vs. empty-tank reference",
                            _VOLTAGE_POLAR_ID, badge="V", badge_color=ACCENT, height=380,
                            interpretation=(
-                               "Polar overlay of measured voltages (solid) versus the empty-tank reference (dashed), with each point placed at its electrode-pair angle. "
-                               "Where the two lines diverge, an inclusion is redirecting current near those electrodes. "
-                               "Symmetric divergence on opposite sides suggests an inclusion along that diameter. "
-                               "If the lines fully overlap, this injection direction is not sensitive to the inclusion — check other steps."
+                               "The solid line is what we actually measured; the dashed line is what the empty tank looks like with nothing inside. "
+                               "Where the two lines pull apart, something inside the tank is redirecting current. That's where an inclusion is. "
+                               "If you see matching divergence on both sides, the inclusion probably sits along that diameter. "
+                               "If the lines track each other perfectly for this step, try a different injection direction."
                            )),
                 ],
                 style=_grid(420),
             ),
 
-            # ── Voltage ──────────────────────────────────────
             _row_label("Voltage Difference",
-                       "Uel − Uelref · the signal the algorithms actually use"),
+                       "Uel minus Uelref, the signal reconstruction algorithms actually work with"),
             html.Div(
                 [_panel("Inclusion Signal",
                         "Per measurement pair for the selected injection",
                         _VOLTAGE_DIFF_ID, badge="ΔV", badge_color=SUCCESS, height=280,
                         interpretation=(
-                            "ΔV = V_measured − V_reference per pair; this is the direct input signal used by reconstruction algorithms. "
-                            "Green bar = voltage rose (inclusion pushed current toward that pair); red bar = voltage fell. "
-                            "A cluster of tall bars points to the angular region where the inclusion sits. "
-                            "Isolated large bars surrounded by near-zero neighbours are more likely electrode noise than a true inclusion signal."
+                            "This is literally the signal reconstruction algorithms work with. It's the difference between what we measured and what we'd expect from an empty tank. "
+                            "Green bars mean the inclusion pushed voltage up for that pair; red means it pulled it down. "
+                            "A bunch of tall bars clustered together tells you roughly where the inclusion is angularly. "
+                            "A single tall bar with nothing around it is usually noise, not a real inclusion signal."
                         ))],
                 style=_grid(420),
             ),
 
-            # ── Resistance — per injection ────────────────────
-            _row_label("Resistance · This Injection",
-                       "R = V/I · absolute, difference from reference, and SNR"),
+            _row_label("Resistance for This Injection",
+                       "Absolute R, difference from reference, and SNR per pair"),
             html.Div(
                 [
                     _panel("R per Pair",
-                           "Green = positive · red = negative",
+                           "Green = positive resistance, red = sign reversal",
                            _RES_BAR_ID, badge="R", badge_color=WARN, height=260,
                            interpretation=(
-                               "R = V/I for each measurement pair at the selected injection step. "
-                               "Green = positive resistance (normal); red = sign reversal, which can indicate a conductive inclusion, strong current deflection, or an electrode contact problem. "
-                               "Outlier bars — much taller or shorter than their neighbours — mark pairs whose current path is strongly perturbed by an inclusion. "
-                               "A smooth profile with no outliers means this injection direction is not sensitive to the inclusion."
+                               "Resistance per pair for this injection. Green is the normal case; red means the sign flipped, "
+                               "which can happen with conductive inclusions or a bad electrode contact. "
+                               "Bars that stick out above or below their neighbours are the ones whose current paths got disrupted by the inclusion. "
+                               "If everything looks flat and uniform, this injection direction probably isn't sensitive to whatever's inside."
                            )),
                     _panel("ΔR = R − R_ref",
-                           "Resistance difference · pre-reconstruction anomaly signal",
+                           "Pre-reconstruction anomaly signal",
                            _RES_DELTA_ID, badge="ΔR", badge_color=DANGER, height=260,
                            interpretation=(
-                               "ΔR = R_measured − R_reference isolates the inclusion's effect from the baseline tank geometry. "
-                               "Positive bar (green) = inclusion raised resistance for that pair; negative bar (red) = inclusion lowered it (conductive anomaly). "
-                               "Near-zero bars indicate pairs insensitive to the inclusion for this injection direction. "
-                               "A narrow cluster of large bars suggests a small localised anomaly; a wide cluster suggests a large or diffuse one."
+                               "Subtracting the reference takes out the baseline and leaves just the inclusion's fingerprint. "
+                               "Green bars show pairs where resistance went up (resistive anomaly); red bars where it went down (conductive). "
+                               "Pairs hovering near zero weren't affected by the inclusion from this angle. "
+                               "A tight cluster of large bars suggests a small localised object; if the whole chart lights up, the anomaly is large or diffuse."
                            )),
                     _panel("Signal-to-Noise per Pair",
-                           "|ΔV|/|V_ref| · bright = high information content",
+                           "Brighter bars carry more information about the inclusion",
                            _SNR_ID, badge="SNR", badge_color="#5b8def", height=260,
                            interpretation=(
-                               "|ΔV| / |V_ref| per pair — how large the inclusion signal is relative to the background voltage. "
-                               "Tall, bright-orange bars = highly informative pairs; short pale bars contribute little and may be noise-dominated. "
-                               "If all bars are near zero, the inclusion lies in a shadow zone for this injection — other steps will cover it. "
-                               "High-SNR pairs can be trusted more during inversion; low-SNR pairs may need down-weighting."
+                               "A simple ratio of signal to background showing how loud the inclusion's effect is relative to the empty-tank voltage. "
+                               "Tall bright bars are the most useful pairs for reconstruction; short pale ones are barely above the noise floor. "
+                               "If everything is near zero, the inclusion happens to be in a blind spot for this injection and other steps will do better. "
+                               "The tall bars are the ones you'd want to trust most if you were weighting the inversion manually."
                            )),
                 ],
                 style=_grid(340),
             ),
 
-            # ── Resistance — across injections ───────────────
-            _row_label("Resistance · All Injections",
+            _row_label("Resistance Across All Injections",
                        "How R patterns vary across the full injection protocol"),
             html.Div(
                 [
                     _panel("All Injections Overlay",
-                           "Grey = other injections · highlighted = selected",
+                           "Selected injection highlighted in yellow",
                            _RES_OVERLAY_ID, badge="2", badge_color="#a07bff", height=260,
                            interpretation=(
-                               "Every injection's R profile drawn at once; the selected injection is highlighted in yellow. "
-                               "Wide spread in the grey bundle = diverse current paths — good for reconstruction. "
-                               "If the yellow line sits far from the cluster for specific pairs, those pairs are especially sensitive to the inclusion for this direction. "
-                               "A single grey line deviating sharply from all others may indicate a faulty injection step or electrode drop-out."
+                               "All injection profiles stacked together, with the one you've selected picked out in yellow. "
+                               "A wide spread in the grey lines means the injection protocol is exploring diverse paths through the tank, which is what you want for a good reconstruction. "
+                               "When the yellow line drifts away from the pack at certain pairs, those are the ones most sensitive to the inclusion from that angle. "
+                               "A single grey trace that goes rogue while all the others agree is worth checking. It could be a bad electrode or a dropped injection."
                            )),
                     _panel("Mean ± Std Summary",
-                           "All injections aggregated · static · updates on level/sample change",
+                           "Aggregated over all injections, updates when level or sample changes",
                            _RES_SUMMARY_ID, badge="3", badge_color=SUCCESS, height=260,
                            interpretation=(
-                               "Purple line = mean R per pair across all injections; shaded band = ±1 std. "
-                               "Orange marker colour = high standard deviation — those pairs are the most informative because their resistance shifts significantly with injection direction. "
-                               "Pairs with a very narrow band are stable but carry little spatial information. "
-                               "At higher difficulty levels the band narrows overall, reflecting reduced measurement diversity."
+                               "The purple line is the average resistance per pair over all injections; the shaded band shows how much it varies. "
+                               "Pairs with orange markers have high variability. They respond differently depending on which electrodes inject, making them valuable for figuring out what's inside. "
+                               "Pairs with a very tight band are consistent but tell you less about spatial structure. "
+                               "At higher difficulty levels the whole band tends to narrow as there are fewer injection directions available."
                            )),
                 ],
                 style=_grid(420),
             ),
 
-            # ── Anomaly & stability ───────────────────────────
             _row_label("Anomaly & Stability",
-                       "Which injections carry the most inclusion information, "
+                       "Which injections carry the most inclusion information "
                        "and which measurement pairs are unstable"),
             html.Div(
                 [
                     _panel("Anomaly Score per Injection",
-                           "Σ|ΔR| · taller = more inclusion influence",
+                           "Taller bar means stronger inclusion influence for that direction",
                            _ANOMALY_ID, badge="A", badge_color=DANGER, height=260,
                            interpretation=(
-                               "Each bar = Σ|ΔR| summed over all pairs for one injection; taller bar = that direction was more strongly perturbed by inclusions. "
-                               "Yellow bar = currently selected injection. "
-                               "A peaked distribution (few very tall bars) means the inclusions sit near specific source/sink axes. "
-                               "An isolated outlier bar far above its neighbours with no physical adjacency may be a hardware fault rather than a real inclusion signal."
+                               "Each bar shows how much the inclusion disturbed measurements for that injection direction, summing up the absolute resistance changes over all pairs. "
+                               "Taller bar means that injection angle was looking right at the inclusion. The yellow bar is the step you currently have selected. "
+                               "If only a couple of bars are very tall, the inclusion is probably sitting close to those source/sink axes. "
+                               "One bar massively taller than everything else and not matching adjacent injections could be a hardware glitch rather than a real anomaly."
                            )),
                     _panel("Measurement Stability",
-                           "CV across all injections · static · updates on level/sample change",
+                           "Coefficient of variation per pair, updates when level or sample changes",
                            _STABILITY_ID, badge="CV", badge_color="#a07bff", height=260,
                            interpretation=(
-                               "CV = std / |mean| per pair across all injections — how consistently each pair reads regardless of which electrodes inject. "
-                               "Green bar = stable (below 2× median threshold); red bar = high variability, either from inclusion sensitivity or electrode instability. "
-                               "A few isolated red bars near the inclusion region are healthy. "
-                               "Many consecutive red bars far from the inclusion suggest electrode contact problems or systematic noise."
+                               "Coefficient of variation measures how much each pair's resistance jumps around as we step through different injections. "
+                               "Green bars are well-behaved; red bars are all over the place. "
+                               "A handful of red bars in the region where you'd expect the inclusion is perfectly normal. Those pairs are reacting to it. "
+                               "But a long run of red bars where there shouldn't be anything is worth checking; an electrode may have a bad connection."
                            )),
                 ],
                 style=_grid(420),
             ),
 
-            # ── Electrode & level coverage ────────────────────
             _row_label("Electrode & Coverage Analysis",
                        "Contact quality per electrode and how coverage shrinks with level"),
             html.Div(
                 [
                     _panel("Electrode Contact Quality",
-                           "Mean |R| per electrode · static · updates on level/sample change",
+                           "Per-electrode average resistance, updates when level or sample changes",
                            _IMPEDANCE_ID, badge="Z", badge_color=WARN, height=260,
                            interpretation=(
-                               "Mean |R| per electrode averaged over every pair it participates in — a proxy for galvanic contact quality. "
-                               "Green bar = within normal range; red bar = above the 2× median threshold, indicating possible high contact impedance or poor coupling. "
-                               "One or two isolated red bars are common; multiple consecutive red bars (e.g. E5–E7) suggest a connector block issue. "
-                               "High-impedance electrodes reduce effective SNR for every pair they belong to."
+                               "For each electrode, this averages the absolute resistance across every pair it's involved in, giving a rough indicator of how well it's making contact. "
+                               "Green is fine; red means its average is more than twice the median, which could be high contact impedance or a loose gel connection. "
+                               "A lone red bar here and there is normal. If you see three or four reds in a row (like E5 through E7), the whole connector block for that section might need attention. "
+                               "Bad contacts drag down the SNR for every pair those electrodes participate in."
                            )),
                     _panel("Coverage per Level",
-                           "Electrode & pair count per level · static · updates on level change",
+                           "Electrode and pair count across all difficulty levels",
                            _LEVEL_COVERAGE_ID, badge="L", badge_color="#5b8def", height=260,
                            interpretation=(
-                               "Blue bars = active electrode count per difficulty level (L1–L7); green line = measurement pair count (right axis). "
-                               "Highlighted bar = current level. "
-                               "Both drop from L1 to L7, but pairs fall faster than electrodes because pair count scales roughly as N². "
-                               "Fewer pairs means fewer independent current paths — the direct reason reconstruction quality degrades at higher difficulty levels."
+                               "Blue bars show how many electrodes are active at each level; the green line tracks how many measurement pairs that gives us (right axis). "
+                               "The highlighted bar is where you currently are. "
+                               "Notice that pairs drop much faster than electrodes as you go from L1 to L7. That's because pairs scale roughly with the square of the electrode count. "
+                               "By L7 you've lost nearly 80% of the measurement pairs from L1, which is the main reason reconstruction quality degrades so steeply."
                            )),
                 ],
                 style=_grid(420),
             ),
 
-            # ── Coverage polar ────────────────────────────────
             _row_label("Coverage Map",
                        "Polar view of active vs. removed electrodes "
                        "and sampled measurement pair connections"),
             html.Div(
                 [_panel("Electrode Coverage Polar",
-                        "Red = source · blue = sink · updates every injection step",
+                        "Updates with each injection step",
                         _COVERAGE_POLAR_ID, badge="M", badge_color=ACCENT, height=400,
                         interpretation=(
-                            "Spatial map of the 32-electrode tank rim for the selected injection step. "
-                            "Blue circles = active electrodes; grey ✕ = removed at this level; large red dot = source (+); large blue dot = sink (−). "
-                            "Faint purple lines connect a sampled subset of active measurement pairs. "
-                            "Press Play to watch the source/sink pair rotate — gaps in the sweep at higher levels are angular blind spots where removed electrodes reduce reconstruction sensitivity."
+                            "A top-down view of the electrode ring around the tank for the current injection step. "
+                            "Blue dots are active electrodes; grey X marks are ones that have been removed at this difficulty level. "
+                            "The big red dot is where current enters and the big blue dot is where it exits. "
+                            "The faint purple lines show a sample of the measurement pairs in use. "
+                            "Hit Play to watch the injection pair sweep around the ring. At higher levels you'll see obvious gaps where removed electrodes leave the reconstruction blind."
                         ))],
                 style=_grid(420),
             ),
@@ -947,6 +912,7 @@ def layout() -> html.Div:
     )
 
 
+# CSS grid style that fits panels responsively at a given minimum column width
 def _grid(min_px: int) -> dict:
     return {
         "display": "grid",
@@ -955,6 +921,7 @@ def _grid(min_px: int) -> dict:
     }
 
 
+# renders the M6 header card with module badge, title, description, and the algorithm-note
 def _header() -> html.Div:
     return html.Div(
         [
@@ -972,16 +939,16 @@ def _header() -> html.Div:
                 ]
             ),
             html.P(
-                "Explore the raw KTC2023 electrical measurements — injected currents, "
-                "electrode voltages, and derived resistance — independent of any "
-                "reconstruction. Step through injection patterns to see how measurement "
-                "coverage shrinks at higher difficulty levels.",
+                "A direct look at the raw measurement data before any reconstruction happens. "
+                "Currents, voltages, and resistance all laid out for the selected level and sample. "
+                "Step through the injection patterns to see how the coverage changes as electrodes "
+                "get removed at higher difficulty levels.",
                 style={"color": MUTED, "margin": "8px 0 0", "fontSize": "13px",
                        "lineHeight": "1.5"},
             ),
             html.Div(
                 "ℹ  Level and Sample control what data is shown. "
-                "Algorithm has no effect here — raw measurements are the same "
+                "Algorithm has no effect here. Raw measurements are the same "
                 "for all algorithms.",
                 style={
                     "marginTop": "10px",
@@ -998,6 +965,7 @@ def _header() -> html.Div:
     )
 
 
+# small badge-style chip showing a label and value pair in the status row
 def _chip(label: str, value: str, accent: str | None = None) -> html.Div:
     return html.Div(
         [
@@ -1015,6 +983,7 @@ def _chip(label: str, value: str, accent: str | None = None) -> html.Div:
     )
 
 
+# section heading row with an uppercase title and a dimmer subtitle, separated by a bottom border
 def _row_label(title: str, subtitle: str) -> html.Div:
     return html.Div(
         [
@@ -1028,11 +997,12 @@ def _row_label(title: str, subtitle: str) -> html.Div:
         style={
             "display": "flex", "alignItems": "baseline",
             "padding": "4px 2px 0", "paddingBottom": "6px",
-            "borderBottom": f"1px dashed {BORDER}", "marginTop": "4px",
+            "borderBottom": f"1px solid {BORDER}", "marginTop": "4px",
         },
     )
 
 
+# builds the injection slider, play button, and export CSV button in one card
 def _injection_controls() -> html.Div:
     return html.Div(
         [
@@ -1097,6 +1067,7 @@ def _injection_controls() -> html.Div:
     )
 
 
+# generates tick mark labels for the injection slider, spacing them so they don't crowd together
 def _injection_marks(n_inj: int) -> dict:
     step = 10 if n_inj > 30 else 5
     marks = {
@@ -1108,6 +1079,7 @@ def _injection_marks(n_inj: int) -> dict:
     return marks
 
 
+# card component wrapping a graph with a header, badge, subtitle, and optional interpretation text
 def _panel(
     title: str,
     subtitle: str,
@@ -1153,7 +1125,7 @@ def _panel(
                 "fontSize": "11px",
                 "lineHeight": "1.65",
                 "color": "#8a9ab8",
-                "borderTop": f"1px dashed {BORDER}",
+                "borderTop": f"1px solid {BORDER}",
                 "whiteSpace": "pre-line",
             },
         ))
@@ -1164,6 +1136,7 @@ def _panel(
     )
 
 
+# coloured notification banner for info, warning, or error messages at the top of the page
 def _banner(message: str, kind: str = "info") -> html.Div:
     palette = {
         "info":  ("#1f3a5f", "#5b8def", "#cfe0ff"),
@@ -1178,20 +1151,12 @@ def _banner(message: str, kind: str = "info") -> html.Div:
     })
 
 
-# ── Callbacks ─────────────────────────────────────────────────
-
 def register_callbacks(app) -> None:  # noqa: ANN001
-    """Wire sidebar selectors + injection stepper to all M6 panels.
+    # split into two callbacks to keep play animation smooth:
+    # update_panels_fast fires on every injection slider tick,
+    # update_panels_slow only fires when level or sample changes.
 
-    Two separate callbacks keep play animation smooth:
-
-    ``update_panels_fast``  — 8 figures that depend on the injection index.
-                              Fires on every slider tick (including during play).
-    ``update_panels_slow``  — 5 figures that are fixed for a given
-                              (level, sample) and never need to change during
-                              play.  Fires only when level or sample changes.
-    """
-
+    # toggles between play and pause, enabling or disabling the interval timer
     @app.callback(
         Output(_INTERVAL_ID, "disabled"),
         Output(_PLAYING_ID, "data"),
@@ -1204,6 +1169,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         playing = not is_playing
         return not playing, playing, ("⏸  Pause" if playing else "▶  Play")
 
+    # updates slider range when level/sample changes, and steps the index forward during animation
     @app.callback(
         Output(_INJ_SLIDER_ID, "max"),
         Output(_INJ_SLIDER_ID, "marks"),
@@ -1229,13 +1195,9 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             return n_inj - 1, _injection_marks(n_inj), (current + 1) % n_inj
         return n_inj - 1, _injection_marks(n_inj), min(current, n_inj - 1)
 
-    # ── Fast callback: injection-dependent figures ────────────
-    # Fires on every slider change (including play animation ticks).
-    # sidebar-algorithm-dropdown is included as an Input so the callback
-    # re-runs when algorithm changes — giving the user visual confirmation
-    # that M6 heard the change (even though measurements are algorithm-
-    # independent and the displayed data stays the same).
-
+    # redraws the injection-dependent panels on every slider tick to keep animation smooth
+    # algorithm dropdown is included so the callback re-runs on algorithm change
+    # (measurements are algorithm-independent but we want the UI to react visually)
     @app.callback(
         Output(_CURRENT_ID,        "figure"),
         Output(_VOLTAGE_POLAR_ID,  "figure"),
@@ -1288,7 +1250,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                 return builder(*args)
             except Exception:  # pragma: no cover
                 logger.exception("M6 %s failed", builder.__name__)
-                return empty_figure("Panel error — see logs")
+                return empty_figure("Panel error, see logs")
 
         figs = (
             _safe(current_polar_figure,      measurement, level, inj_idx),
@@ -1319,19 +1281,17 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         banner = None
         if reference is None:
             banner = _banner(
-                "Empty-tank reference (measurements/ref.mat) not found — "
+                "Empty-tank reference (measurements/ref.mat) not found. "
                 "ΔV, ΔR, SNR, and anomaly panels are disabled.", "warn")
         elif not (np.isfinite(measurement.voltage_matrix).all()
                   and np.isfinite(measurement.current_matrix).all()
                   and np.isfinite(measurement.resistance_matrix).all()):
             banner = _banner(
-                "Measurement contains non-finite values (NaN/Inf) — "
-                "shown as 0 in all panels. Check the staged .mat files.", "warn")
+                "Measurement contains non-finite values (NaN/Inf). "
+                "Shown as 0 in all panels. Check the staged .mat files.", "warn")
         return (*figs, chips, banner)
 
-    # ── Slow callback: injection-independent figures ──────────
-    # Only fires when level or sample changes — never during play animation.
-
+    # redraws the aggregate panels that only need updating when level or sample changes
     @app.callback(
         Output(_RES_SUMMARY_ID,    "figure"),
         Output(_STABILITY_ID,      "figure"),
@@ -1358,7 +1318,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                 return builder(*args)
             except Exception:  # pragma: no cover
                 logger.exception("M6 %s failed", builder.__name__)
-                return empty_figure("Panel error — see logs")
+                return empty_figure("Panel error, see logs")
 
         return (
             _safe(resistance_summary_figure,    measurement),
@@ -1367,6 +1327,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             _safe(level_coverage_figure,        level, sample),
         )
 
+    # exports R, V, and I for the selected injection as a CSV file
     @app.callback(
         Output(_DOWNLOAD_ID, "data"),
         Input(_DOWNLOAD_BTN_ID, "n_clicks"),
