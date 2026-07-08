@@ -1,8 +1,10 @@
 """Module 3: Side-by-Side Comparison Grid.
 
-Three-column grid showing all three algorithms(ABC1, CUQI8, PNPE2E) for the currently selected level and sample triple simultaneously.
+Three-column grid showing **all three algorithms** (ABC1, CUQI8, PNPE2E) for
+the currently selected ``(level, sample)`` triple simultaneously.
 
-Layout :
+Layout
+------
     Row 1  — Algorithm reconstructions (3-column grid)
     Row 2  — Pairwise pixel-difference images (3 pairs)
     Row 3  — Voltage measurement chart  +  Metrics scorecard
@@ -10,13 +12,13 @@ Layout :
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
 import numpy as np
+import plotly.colors as pc
 import plotly.graph_objects as go
-from dash import Input, Output, State, dcc, html
+from dash import Input, Output, dcc, html
 
 from ktc_vis.adapters import ReferenceOutputAdapter
 from ktc_vis.data.loader import KTCDataLoader
@@ -38,13 +40,13 @@ from ktc_vis.utils.figures import (
 
 logger = logging.getLogger(__name__)
 
-# ── Project paths 
+# ── Project paths ──────────────────────────────────────────────────────────────
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
 _CACHE_PATH = _PROJECT_ROOT / "data" / "cache" / "results.h5"
 _SAMPLE_MAP = {"a": 1, "b": 2, "c": 3, "d": 4}
 
-# ── Algorithm registry 
+# ── Algorithm registry ─────────────────────────────────────────────────────────
 _ALGORITHMS: list[str] = ["abc1", "cuqi8", "pnpe2e"]
 _ALG_COLORS: dict[str, str] = {
     "abc1": "#5b8def",   # blue
@@ -52,7 +54,7 @@ _ALG_COLORS: dict[str, str] = {
     "pnpe2e": "#f4c870",   # gold
 }
 
-# ── Singletons 
+# ── Singletons ─────────────────────────────────────────────────────────────────
 _LOADER = KTCDataLoader()
 _ADAPTERS: dict[str, ReferenceOutputAdapter] = {}
 
@@ -63,54 +65,19 @@ def _get_adapter(name: str) -> ReferenceOutputAdapter:
     return _ADAPTERS[name]
 
 
-# ── IDs (all prefixed with ``m3-``) 
+# ── IDs (all prefixed with ``m3-``) ───────────────────────────────────────────
 _CHIPS_ID = "m3-chips"
 _BANNER_ID = "m3-banner"
-
 # Reconstruction row
 _RECON_IDS = {alg: f"m3-recon-{alg}" for alg in _ALGORITHMS}
-
 # Pairwise diff row
 _DIFF_PAIRS = [("abc1", "cuqi8"), ("abc1", "pnpe2e"), ("cuqi8", "pnpe2e")]
 _DIFF_IDS = {(a, b): f"m3-diff-{a}-{b}" for a, b in _DIFF_PAIRS}
-
 # Bottom row
 _VOLTAGE_ID = "m3-voltage-chart"
-_VOLTAGE_WRAPPER_ID = "m3-voltage-graph-wrapper"
-_VOLTAGE_HINT_ID = "m3-voltage-fullscreen-hint"
-_VOLTAGE_FULLSCREEN_STORE = "m3-voltage-fullscreen"
 _SCORE_ID = "m3-scorecard"
 
-_VOLTAGE_WRAPPER_STYLE_NORMAL = {"padding": "6px 6px 4px"}
-_VOLTAGE_WRAPPER_STYLE_FULL = {
-    "position": "fixed",
-    "top": "0",
-    "left": "0",
-    "width": "100vw",
-    "height": "100vh",
-    "zIndex": 9999,
-    "backgroundColor": "#12121f",
-    "padding": "18px",
-    "boxSizing": "border-box",
-    "boxShadow": "0 0 60px rgba(0,0,0,0.7)",
-}
-_VOLTAGE_GRAPH_STYLE_NORMAL = {"height": "500px", "width": "100%"}
-_VOLTAGE_GRAPH_STYLE_FULL = {"height": "calc(100vh - 36px)", "width": "100%"}
-_VOLTAGE_HINT_STYLE_NORMAL = {"display": "none"}
-_VOLTAGE_HINT_STYLE_FULL = {
-    "display": "block",
-    "position": "absolute",
-    "top": "26px",
-    "right": "34px",
-    "color": "#c8c8d8",
-    "fontSize": "11px",
-    "backgroundColor": "rgba(0,0,0,0.4)",
-    "padding": "4px 10px",
-    "borderRadius": "6px",
-    "zIndex": 10000,
-}
-
-# ── Shared style helpers 
+# ── Shared style helpers ───────────────────────────────────────────────────────
 _PANEL_HDR = {
     "display": "flex",
     "alignItems": "center",
@@ -120,9 +87,9 @@ _PANEL_HDR = {
 }
 
 
-
+# ═══════════════════════════════════════════════════════════════════════════════
 # Layout
-
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def layout() -> html.Div:
     """Three-section layout: reconstructions → diffs → voltage + scorecard."""
@@ -133,7 +100,7 @@ def layout() -> html.Div:
                      style={"display": "flex", "flexWrap": "wrap", "gap": "8px"}),
             html.Div(id=_BANNER_ID),
 
-            # ── Row 1: reconstructions 
+            # ── Row 1: reconstructions ────────────────────────────────────────
             _section_label(
                 "Algorithm Reconstructions",
                 "All three algorithms at the same level and sample — select any "
@@ -141,7 +108,7 @@ def layout() -> html.Div:
             ),
             _recon_grid(),
 
-            # ── Row 2: pairwise differences 
+            # ── Row 2: pairwise differences ───────────────────────────────────
             _section_label(
                 "Pairwise Pixel Differences",
                 "Diverging map: purple = A classifies higher, gold = B classifies higher, "
@@ -149,7 +116,7 @@ def layout() -> html.Div:
             ),
             _diff_grid(),
 
-            # ── Row 3: voltage chart + metrics scorecard 
+            # ── Row 3: voltage chart + metrics scorecard ──────────────────────
             _section_label(
                 "Measurement Data & Metrics",
                 "Left: shows how much voltage was measured at each electrode channel — "
@@ -168,7 +135,8 @@ def layout() -> html.Div:
     )
 
 
-# ── Section building blocks 
+# ── Section building blocks ────────────────────────────────────────────────────
+
 def _header() -> html.Div:
     return html.Div(
         [
@@ -302,23 +270,14 @@ def _bottom_row() -> html.Div:
                 style=_PANEL_HDR,
             ),
             html.Div(
-                [
-                    dcc.Graph(
-                        id=_VOLTAGE_ID,
-                        figure=empty_figure("Loading…"),
-                        config={"displayModeBar": False, "responsive": True},
-                        style=_VOLTAGE_GRAPH_STYLE_NORMAL,
-                    ),
-                    html.Div(
-                        "Double-click to exit full screen",
-                        id=_VOLTAGE_HINT_ID,
-                        style=_VOLTAGE_HINT_STYLE_NORMAL,
-                    ),
-                ],
-                id=_VOLTAGE_WRAPPER_ID,
-                style=_VOLTAGE_WRAPPER_STYLE_NORMAL,
+                dcc.Graph(
+                    id=_VOLTAGE_ID,
+                    figure=empty_figure("Loading…"),
+                    config={"displayModeBar": False, "responsive": True},
+                    style={"height": "500px", "width": "100%"},
+                ),
+                style={"padding": "6px 6px 4px"},
             ),
-            dcc.Store(id=_VOLTAGE_FULLSCREEN_STORE, data=False),
             html.Div(
                 [
                     html.Div(
@@ -532,7 +491,10 @@ def _banner(message: str, kind: str = "info") -> html.Div:
         "borderRadius": "10px", "fontSize": "12.5px",
     })
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Figure builders
+# ═══════════════════════════════════════════════════════════════════════════════
 
 _SEG_COLORSCALE = [
     [0.00, CLASS_COLORS[0]],
@@ -618,30 +580,14 @@ def _diff_figure(
 _MAX_INJ_SHOWN = 8   # max injections shown per channel group
 _MAX_CH_SHOWN = 32   # max channels on x-axis before range-slider kicks in
 
-# Fixed categorical order (dark-surface variants), one hue per injection slot —
-# validated for CVD separation against the chart's #1a1a2e plot background.
-# Never regenerate this from a continuous colorscale: adjacent Plasma steps
-# look near-identical on a dark background.
-_INJECTION_COLORS = [
-    "#3987e5",  # blue
-    "#199e70",  # aqua
-    "#c98500",  # yellow
-    "#008300",  # green
-    "#9085e9",  # violet
-    "#e66767",  # red
-    "#d55181",  # magenta
-    "#d95926",  # orange
-]
-
 
 def _voltage_figure(measurement) -> go.Figure:
     """Grouped bar chart — x = channel, bars per channel = one per injection.
 
     Each channel gets a cluster of bars, one bar per (sampled) injection.
-    Injections are colour-coded via the fixed _INJECTION_COLORS categorical
-    palette (distinct, dark-surface-safe hues) so adjacent injections stay
-    visually separable. A range-slider appears when there are more than
-    _MAX_CH_SHOWN channels.
+    Injections are colour-coded blue→red via the Plasma palette so you can
+    immediately see how the voltage pattern shifts with the injection index.
+    A range-slider appears when there are more than _MAX_CH_SHOWN channels.
     """
     V = measurement.voltage_matrix  # (n_inj, n_ch)
     n_inj, n_ch = V.shape
@@ -665,13 +611,14 @@ def _voltage_figure(measurement) -> go.Figure:
         )
 
     x_labels = [f"Ch {ch + 1}" for ch in ch_indices]
+    palette = pc.sample_colorscale("Plasma", max(len(inj_indices), 2))
 
     fig = go.Figure()
 
     # One trace per injection — all sharing the same channel x-axis positions
     for slot, inj_idx in enumerate(inj_indices):
         y_values = [float(V[inj_idx, ch]) for ch in ch_indices]
-        color = _INJECTION_COLORS[slot % len(_INJECTION_COLORS)]
+        color = palette[slot]
         fig.add_trace(
             go.Bar(
                 name=f"Inj {inj_idx + 1}",
@@ -679,8 +626,8 @@ def _voltage_figure(measurement) -> go.Figure:
                 y=y_values,
                 marker=dict(
                     color=color,
-                    line=dict(width=1, color="#1a1a2e"),
-                    opacity=1.0,
+                    line=dict(width=0.5, color="rgba(0,0,0,0.3)"),
+                    opacity=0.88,
                 ),
                 hovertemplate=(
                     f"<b>Injection {inj_idx + 1}</b><br>"
@@ -1036,7 +983,9 @@ def _td_style(is_best: bool, is_selected: bool) -> dict:
     }
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
 # Data loading helpers
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None:
     """Try cache first, then fall back to ReferenceOutputAdapter."""
@@ -1058,8 +1007,9 @@ def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None
         return None
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
 # Callbacks
-
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def register_callbacks(app) -> None:  # noqa: ANN001
     """Wire sidebar selectors to all M3 panels."""
@@ -1085,7 +1035,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     def _update_all(level: int, sample: str, selected_alg: str):
         level = int(level)
 
-        # ── 1. Load measurement (needed for voltage chart) 
+        # ── 1. Load measurement (needed for voltage chart) ────────────────────
         measurement = None
         banner = None
         try:
@@ -1097,14 +1047,14 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             logger.exception("M3 measurement load failed")
             banner = _banner(f"Measurement load error: {exc}", "warn")
 
-        # ── 2. Load all three reconstructions 
+        # ── 2. Load all three reconstructions ─────────────────────────────────
         recons: dict[str, np.ndarray | None] = {
             alg: _load_reconstruction(alg, level, sample)
             for alg in _ALGORITHMS
         }
         n_loaded = sum(1 for v in recons.values() if v is not None)
 
-        # ── 3. Build reconstruction figures 
+        # ── 3. Build reconstruction figures ───────────────────────────────────
         recon_figs = []
         for alg in _ALGORITHMS:
             r = recons[alg]
@@ -1115,7 +1065,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     empty_figure(f"No data for {alg.upper()}\nRun benchmark")
                 )
 
-        # ── 4. Build pairwise difference figures 
+        # ── 4. Build pairwise difference figures ──────────────────────────────
         diff_figs = []
         for alg_a, alg_b in _DIFF_PAIRS:
             ra = recons[alg_a]
@@ -1130,7 +1080,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     empty_figure(f"Missing: {missing.upper()}")
                 )
 
-        # ── 5. Voltage figure 
+        # ── 5. Voltage figure ─────────────────────────────────────────────────
         if measurement is not None:
             try:
                 voltage_fig = _voltage_figure(measurement)
@@ -1140,10 +1090,10 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         else:
             voltage_fig = empty_figure("Measurement data unavailable")
 
-        # ── 6. Scorecard 
+        # ── 6. Scorecard ──────────────────────────────────────────────────────
         scorecard = _scorecard_children(level, sample, selected_alg)
 
-        # ── 7. Chips 
+        # ── 7. Chips ──────────────────────────────────────────────────────────
         chips = [
             _chip("level", f"L{level}", accent=WARN),
             _chip("sample", sample.upper(), accent="#cfe0ff"),
@@ -1165,7 +1115,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     agr = float((r == gt).mean()) * 100.0
                     chips.append(
                         _chip(
-                            f"{alg.upper()} pixel agreement",
+                            alg.upper(),
                             f"{agr:.1f}%",
                             accent=SUCCESS if agr >= 90 else (
                                 WARN if agr >= 70 else DANGER
@@ -1174,64 +1124,3 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     )
 
         return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
-
-    # ── Double-click full-screen toggle for the voltage chart ──────────────
-    # Plotly's default double-click fires a relayout reset
-    # (relayoutData == {"xaxis.autorange": True, "yaxis.autorange": True})
-    # regardless of where on the chart you clicked, so it's a reliable
-    # "double-click happened" signal. We use that signal to flip the wrapper
-    # div between its normal inline size and a fixed, full-viewport overlay,
-    # then nudge Plotly to recompute its canvas size for the new box.
-    app.clientside_callback(
-        """
-        function(relayoutData, isFull) {
-            const isResetEvent = relayoutData
-                && Object.keys(relayoutData).length === 2
-                && relayoutData['xaxis.autorange'] === true
-                && relayoutData['yaxis.autorange'] === true;
-            if (!isResetEvent) {
-                return [
-                    window.dash_clientside.no_update,
-                    window.dash_clientside.no_update,
-                    window.dash_clientside.no_update,
-                    window.dash_clientside.no_update,
-                ];
-            }
-
-            const nowFull = !isFull;
-            const wrapperStyle = nowFull
-                ? %(wrapper_full)s
-                : %(wrapper_normal)s;
-            const graphStyle = nowFull
-                ? %(graph_full)s
-                : %(graph_normal)s;
-            const hintStyle = nowFull
-                ? %(hint_full)s
-                : %(hint_normal)s;
-
-            setTimeout(function() {
-                const graphDiv = document.getElementById('%(graph_id)s');
-                if (graphDiv && window.Plotly) {
-                    window.Plotly.Plots.resize(graphDiv);
-                }
-            }, 60);
-
-            return [nowFull, wrapperStyle, graphStyle, hintStyle];
-        }
-        """ % {
-            "wrapper_full": json.dumps(_VOLTAGE_WRAPPER_STYLE_FULL),
-            "wrapper_normal": json.dumps(_VOLTAGE_WRAPPER_STYLE_NORMAL),
-            "graph_full": json.dumps(_VOLTAGE_GRAPH_STYLE_FULL),
-            "graph_normal": json.dumps(_VOLTAGE_GRAPH_STYLE_NORMAL),
-            "hint_full": json.dumps(_VOLTAGE_HINT_STYLE_FULL),
-            "hint_normal": json.dumps(_VOLTAGE_HINT_STYLE_NORMAL),
-            "graph_id": _VOLTAGE_ID,
-        },
-        Output(_VOLTAGE_FULLSCREEN_STORE, "data"),
-        Output(_VOLTAGE_WRAPPER_ID, "style"),
-        Output(_VOLTAGE_ID, "style"),
-        Output(_VOLTAGE_HINT_ID, "style"),
-        Input(_VOLTAGE_ID, "relayoutData"),
-        State(_VOLTAGE_FULLSCREEN_STORE, "data"),
-        prevent_initial_call=True,
-    )
