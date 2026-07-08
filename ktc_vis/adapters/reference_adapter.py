@@ -1,8 +1,8 @@
 """Reference-output adapter: serves pre-computed reconstructions from disk.
 
 This adapter does **not** run any reconstruction algorithm — it simply loads
-the published reconstruction ``.mat`` files staged under
-``data/raw/ktc2023/reference_outputs/<algo>/``.
+the published reconstruction `.mat` files staged under
+`data/raw/ktc2023/reference_outputs/<algo>/`.
 
 It exists so that Module 1 (Reconstruction Explorer) can render results
 immediately without first wiring up the Docker-based live adapters.

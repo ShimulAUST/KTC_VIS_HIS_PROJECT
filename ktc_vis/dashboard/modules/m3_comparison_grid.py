@@ -5,7 +5,7 @@ Three-column grid showing all three algorithms(ABC1, CUQI8, PNPE2E) for the curr
 Layout :
     Row 1  — Algorithm reconstructions (3-column grid)
     Row 2  — Pairwise pixel-difference images (3 pairs)
-    Row 3  — Voltage measurement chart  +  Metrics scorecard
+    Row 3  — Voltage measurement graph  +  Metrics scorecard
 """
 
 from __future__ import annotations
