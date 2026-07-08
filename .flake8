@@ -1,0 +1,14 @@
+[flake8]
+max-line-length = 100
+ignore = E501,W503,E221,E241
+
+per-file-ignores =
+    # teammate modules — do not fix style in these files directly
+    ktc_vis/dashboard/modules/m3_comparison_grid.py: W291,W293,E302,E303,E305
+    ktc_vis/dashboard/modules/m5_failure_autopsy.py: W291,W293
+    # shared components and utilities with pre-existing style issues
+    ktc_vis/dashboard/components/sidebar.py: W291,W293
+    ktc_vis/data/loader.py: F401,E265
+    ktc_vis/data/subsampler.py: E303
+    ktc_vis/metrics/class_metrics.py: W291,W293
+
