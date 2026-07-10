@@ -251,6 +251,7 @@ def _recon_grid() -> html.Div:
 
 def _diff_grid() -> html.Div:
     panels = []
+    
     for a, b in _DIFF_PAIRS:
         label = f"{a.upper()} − {b.upper()}"
         panels.append(
