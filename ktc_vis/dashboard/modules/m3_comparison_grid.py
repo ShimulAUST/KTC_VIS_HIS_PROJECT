@@ -138,7 +138,7 @@ def layout() -> html.Div:
             # Row 1: algorithm reconstructions side by side
             _section_label(
                 "Algorithm Reconstructions",
-                "All three algorithms at the same level and sample — select any "
+                "All three algorithms at the same level and sample. Select any "
                 "tab to inspect the highlighted algorithm in detail via M1.",
             ),
             _recon_grid(),
@@ -154,8 +154,8 @@ def layout() -> html.Div:
             # Row 3: raw voltage readings on the left, benchmark scores on the right
             _section_label(
                 "Measurement Data & Metrics",
-                "Left: shows how much voltage was measured at each electrode channel — "
-                "each bar colour is a different current injection. "
+                "Left: shows how much voltage was measured at each electrode channel. "
+                "Each bar colour is a different current injection. "
                 "Right: how well each algorithm performed, based on saved test results.",
             ),
             _bottom_row(),
@@ -331,7 +331,7 @@ def _bottom_row() -> html.Div:
                                 "fontSize": "10.5px", "marginRight": "4px",
                             }),
                             html.Span(
-                                "Measurement channel — each electrode position around the phantom.",
+                                "Measurement channel: each electrode position around the phantom.",
                                 style={"color": MUTED, "fontSize": "10.5px"},
                             ),
                         ],
@@ -357,7 +357,7 @@ def _bottom_row() -> html.Div:
                                 "fontSize": "10.5px", "marginRight": "4px",
                             }),
                             html.Span(
-                                "Each bar colour represents one injection — purple = early, "
+                                "Each bar colour represents one injection: purple = early, "
                                 "yellow = late. Up to 8 injections are evenly sampled from "
                                 "the full set so the chart stays readable.",
                                 style={"color": MUTED, "fontSize": "10.5px"},
