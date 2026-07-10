@@ -78,11 +78,12 @@ _DIFF_IDS = {(a, b): f"m3-diff-{a}-{b}" for a, b in _DIFF_PAIRS}
 # ── IDs for the voltage chart, its fullscreen toggle, and the metrics scorecard
 _VOLTAGE_ID = "m3-voltage-chart"
 _VOLTAGE_WRAPPER_ID = "m3-voltage-graph-wrapper"
-_VOLTAGE_HINT_ID = "m3-voltage-fullscreen-hint"
+_VOLTAGE_FULLSCREEN_BTN_ID = "m3-voltage-fullscreen-btn"
 _VOLTAGE_FULLSCREEN_STORE = "m3-voltage-fullscreen"
 _SCORE_ID = "m3-scorecard"
 
-_VOLTAGE_WRAPPER_STYLE_NORMAL = {"padding": "6px 6px 4px"}
+# ── position:relative lets the fullscreen button sit in the top-right corner
+_VOLTAGE_WRAPPER_STYLE_NORMAL = {"padding": "6px 6px 4px", "position": "relative"}
 _VOLTAGE_WRAPPER_STYLE_FULL = {
     "position": "fixed",
     "top": "0",
@@ -97,18 +98,21 @@ _VOLTAGE_WRAPPER_STYLE_FULL = {
 }
 _VOLTAGE_GRAPH_STYLE_NORMAL = {"height": "500px", "width": "100%"}
 _VOLTAGE_GRAPH_STYLE_FULL = {"height": "calc(100vh - 36px)", "width": "100%"}
-_VOLTAGE_HINT_STYLE_NORMAL = {"display": "none"}
-_VOLTAGE_HINT_STYLE_FULL = {
-    "display": "block",
+
+# ── button floated over the top-right corner of the graph in both modes
+_VOLTAGE_BTN_STYLE = {
     "position": "absolute",
-    "top": "26px",
-    "right": "34px",
+    "top": "10px",
+    "right": "10px",
+    "zIndex": 10001,
+    "background": "rgba(20,20,40,0.75)",
+    "border": f"1px solid {BORDER}",
     "color": "#c8c8d8",
-    "fontSize": "11px",
-    "backgroundColor": "rgba(0,0,0,0.4)",
-    "padding": "4px 10px",
-    "borderRadius": "6px",
-    "zIndex": 10000,
+    "cursor": "pointer",
+    "fontSize": "15px",
+    "lineHeight": "1",
+    "padding": "3px 8px",
+    "borderRadius": "5px",
 }
 
 # ── style dict reused by every panel header to keep them visually consistent
@@ -309,10 +313,13 @@ def _bottom_row() -> html.Div:
                         config={"displayModeBar": False, "responsive": True},
                         style=_VOLTAGE_GRAPH_STYLE_NORMAL,
                     ),
-                    html.Div(
-                        "Double-click to exit full screen",
-                        id=_VOLTAGE_HINT_ID,
-                        style=_VOLTAGE_HINT_STYLE_NORMAL,
+                    # ── dedicated button so double-click on the chart stays free for zoom reset
+                    html.Button(
+                        "⛶",
+                        id=_VOLTAGE_FULLSCREEN_BTN_ID,
+                        n_clicks=0,
+                        title="Toggle fullscreen",
+                        style=_VOLTAGE_BTN_STYLE,
                     ),
                 ],
                 id=_VOLTAGE_WRAPPER_ID,
@@ -1166,19 +1173,16 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
         return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
 
-    # ── full-screen toggle for the voltage chart on double-click ──────────────
-    # Plotly fires a relayout event with xaxis.autorange + yaxis.autorange = True
-    # whenever the user double-clicks anywhere on the chart. We treat that as a
-    # reliable toggle signal and flip the wrapper div between an inline box and a
-    # fixed full-viewport overlay, then nudge Plotly to resize its canvas.
+    # ── fullscreen toggle driven by the ⛶ button, not by relayoutData ──────────
+    # The old approach listened to Plotly's relayoutData for the autorange event
+    # that fires on double-click. The problem: Plotly fires that same event when
+    # the user double-clicks to reset zoom after panning/zooming, so the two
+    # actions conflicted. Using a dedicated button removes the conflict entirely —
+    # double-click on the chart now works purely as Plotly's native zoom reset.
     app.clientside_callback(
         """
-        function(relayoutData, isFull) {
-            const isResetEvent = relayoutData
-                && Object.keys(relayoutData).length === 2
-                && relayoutData['xaxis.autorange'] === true
-                && relayoutData['yaxis.autorange'] === true;
-            if (!isResetEvent) {
+        function(n_clicks, isFull) {
+            if (!n_clicks) {
                 return [
                     window.dash_clientside.no_update,
                     window.dash_clientside.no_update,
@@ -1194,9 +1198,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             const graphStyle = nowFull
                 ? %(graph_full)s
                 : %(graph_normal)s;
-            const hintStyle = nowFull
-                ? %(hint_full)s
-                : %(hint_normal)s;
+            const btnLabel = nowFull ? "✕" : "⛶";
 
             setTimeout(function() {
                 const graphDiv = document.getElementById('%(graph_id)s');
@@ -1205,22 +1207,20 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                 }
             }, 60);
 
-            return [nowFull, wrapperStyle, graphStyle, hintStyle];
+            return [nowFull, wrapperStyle, graphStyle, btnLabel];
         }
         """ % {
             "wrapper_full": json.dumps(_VOLTAGE_WRAPPER_STYLE_FULL),
             "wrapper_normal": json.dumps(_VOLTAGE_WRAPPER_STYLE_NORMAL),
             "graph_full": json.dumps(_VOLTAGE_GRAPH_STYLE_FULL),
             "graph_normal": json.dumps(_VOLTAGE_GRAPH_STYLE_NORMAL),
-            "hint_full": json.dumps(_VOLTAGE_HINT_STYLE_FULL),
-            "hint_normal": json.dumps(_VOLTAGE_HINT_STYLE_NORMAL),
             "graph_id": _VOLTAGE_ID,
         },
         Output(_VOLTAGE_FULLSCREEN_STORE, "data"),
         Output(_VOLTAGE_WRAPPER_ID, "style"),
         Output(_VOLTAGE_ID, "style"),
-        Output(_VOLTAGE_HINT_ID, "style"),
-        Input(_VOLTAGE_ID, "relayoutData"),
+        Output(_VOLTAGE_FULLSCREEN_BTN_ID, "children"),
+        Input(_VOLTAGE_FULLSCREEN_BTN_ID, "n_clicks"),
         State(_VOLTAGE_FULLSCREEN_STORE, "data"),
         prevent_initial_call=True,
     )
