@@ -15,12 +15,12 @@ KTC-Vis was developed as part of the Project HIS course at Frankfurt University 
 
 ## Team Members
 
-| Name | Student ID | Role | Modules |
-|------|------------|------|---------|
-| Muhammad Muzammal | 1541353 | EIT & Data Specialist / Backend Engineer | M1, M5 |
-| Smit Savani | 1420825 | Metrics & Backend Engineer | M3, M6 |
-| Asmita Bhuva | 1541650 | Viz & Frontend Developer | M4, M5 |
-| Shimul Paul | 1441927 | Integration & DevOps Lead | M2, M6 |
+| Name | Student ID | Modules |
+|------|------------|---------|
+| Muhammad Muzammal | 1541353 | M1, M5 |
+| Smit Savani | 1420825 | M3, M6 |
+| Asmita Bhuva | 1541650 | M4, M5 |
+| Shimul Paul | 1441927 | M2, M6 |
 
 ## Motivation
 
