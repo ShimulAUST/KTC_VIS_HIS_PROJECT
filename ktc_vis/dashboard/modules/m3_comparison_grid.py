@@ -1,24 +1,23 @@
 """Module 3: Side-by-Side Comparison Grid.
 
-Three-column grid showing **all three algorithms** (ABC1, CUQI8, PNPE2E) for
-the currently selected ``(level, sample)`` triple simultaneously.
+Shows all three algorithms (ABC1, CUQI8, PNPE2E) for the current level and sample
+at the same time, so you can compare outputs without switching tabs.
 
-Layout
-------
-    Row 1  — Algorithm reconstructions (3-column grid)
-    Row 2  — Pairwise pixel-difference images (3 pairs)
-    Row 3  — Voltage measurement chart  +  Metrics scorecard
+Layout:
+    Row 1  ── Algorithm reconstructions (one panel per algorithm, 3-column grid)
+    Row 2  ── Pairwise pixel-difference images (3 pairs, diverging color scale)
+    Row 3  ── Voltage measurement chart on the left, metrics scorecard on the right
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
 import numpy as np
-import plotly.colors as pc
 import plotly.graph_objects as go
-from dash import Input, Output, dcc, html
+from dash import Input, Output, State, dcc, html
 
 from ktc_vis.adapters import ReferenceOutputAdapter
 from ktc_vis.data.loader import KTCDataLoader
@@ -40,13 +39,13 @@ from ktc_vis.utils.figures import (
 
 logger = logging.getLogger(__name__)
 
-# ── Project paths ──────────────────────────────────────────────────────────────
+# ── paths we need to find raw data and the benchmark cache
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
 _CACHE_PATH = _PROJECT_ROOT / "data" / "cache" / "results.h5"
 _SAMPLE_MAP = {"a": 1, "b": 2, "c": 3, "d": 4}
 
-# ── Algorithm registry ─────────────────────────────────────────────────────────
+# ── the three algorithms this module compares
 _ALGORITHMS: list[str] = ["abc1", "cuqi8", "pnpe2e"]
 _ALG_COLORS: dict[str, str] = {
     "abc1": "#5b8def",   # blue
@@ -54,7 +53,7 @@ _ALG_COLORS: dict[str, str] = {
     "pnpe2e": "#f4c870",   # gold
 }
 
-# ── Singletons ─────────────────────────────────────────────────────────────────
+# ── shared instances, created once and reused across callbacks
 _LOADER = KTCDataLoader()
 _ADAPTERS: dict[str, ReferenceOutputAdapter] = {}
 
@@ -65,19 +64,54 @@ def _get_adapter(name: str) -> ReferenceOutputAdapter:
     return _ADAPTERS[name]
 
 
-# ── IDs (all prefixed with ``m3-``) ───────────────────────────────────────────
+# ── every Dash component ID in this module starts with m3- to avoid clashes
 _CHIPS_ID = "m3-chips"
 _BANNER_ID = "m3-banner"
-# Reconstruction row
+
+# ── one graph ID per algorithm, used in the top reconstruction row
 _RECON_IDS = {alg: f"m3-recon-{alg}" for alg in _ALGORITHMS}
-# Pairwise diff row
+
+# ── the three pairs we show in the pixel-difference row
 _DIFF_PAIRS = [("abc1", "cuqi8"), ("abc1", "pnpe2e"), ("cuqi8", "pnpe2e")]
 _DIFF_IDS = {(a, b): f"m3-diff-{a}-{b}" for a, b in _DIFF_PAIRS}
-# Bottom row
+
+# ── IDs for the voltage chart, its fullscreen toggle, and the metrics scorecard
 _VOLTAGE_ID = "m3-voltage-chart"
+_VOLTAGE_WRAPPER_ID = "m3-voltage-graph-wrapper"
+_VOLTAGE_HINT_ID = "m3-voltage-fullscreen-hint"
+_VOLTAGE_FULLSCREEN_STORE = "m3-voltage-fullscreen"
 _SCORE_ID = "m3-scorecard"
 
-# ── Shared style helpers ───────────────────────────────────────────────────────
+_VOLTAGE_WRAPPER_STYLE_NORMAL = {"padding": "6px 6px 4px"}
+_VOLTAGE_WRAPPER_STYLE_FULL = {
+    "position": "fixed",
+    "top": "0",
+    "left": "0",
+    "width": "100vw",
+    "height": "100vh",
+    "zIndex": 9999,
+    "backgroundColor": "#12121f",
+    "padding": "18px",
+    "boxSizing": "border-box",
+    "boxShadow": "0 0 60px rgba(0,0,0,0.7)",
+}
+_VOLTAGE_GRAPH_STYLE_NORMAL = {"height": "500px", "width": "100%"}
+_VOLTAGE_GRAPH_STYLE_FULL = {"height": "calc(100vh - 36px)", "width": "100%"}
+_VOLTAGE_HINT_STYLE_NORMAL = {"display": "none"}
+_VOLTAGE_HINT_STYLE_FULL = {
+    "display": "block",
+    "position": "absolute",
+    "top": "26px",
+    "right": "34px",
+    "color": "#c8c8d8",
+    "fontSize": "11px",
+    "backgroundColor": "rgba(0,0,0,0.4)",
+    "padding": "4px 10px",
+    "borderRadius": "6px",
+    "zIndex": 10000,
+}
+
+# ── style dict reused by every panel header to keep them visually consistent
 _PANEL_HDR = {
     "display": "flex",
     "alignItems": "center",
@@ -87,12 +121,11 @@ _PANEL_HDR = {
 }
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Layout
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Layout
+
 
 def layout() -> html.Div:
-    """Three-section layout: reconstructions → diffs → voltage + scorecard."""
+    """Build the full M3 page — three stacked sections from top to bottom."""
     return html.Div(
         [
             _header(),
@@ -100,7 +133,7 @@ def layout() -> html.Div:
                      style={"display": "flex", "flexWrap": "wrap", "gap": "8px"}),
             html.Div(id=_BANNER_ID),
 
-            # ── Row 1: reconstructions ────────────────────────────────────────
+            # ── Row 1: algorithm reconstructions side by side
             _section_label(
                 "Algorithm Reconstructions",
                 "All three algorithms at the same level and sample — select any "
@@ -108,7 +141,7 @@ def layout() -> html.Div:
             ),
             _recon_grid(),
 
-            # ── Row 2: pairwise differences ───────────────────────────────────
+            # ── Row 2: where the algorithms disagree, pixel by pixel
             _section_label(
                 "Pairwise Pixel Differences",
                 "Diverging map: purple = A classifies higher, gold = B classifies higher, "
@@ -116,7 +149,7 @@ def layout() -> html.Div:
             ),
             _diff_grid(),
 
-            # ── Row 3: voltage chart + metrics scorecard ──────────────────────
+            # ── Row 3: raw voltage readings on the left, benchmark scores on the right
             _section_label(
                 "Measurement Data & Metrics",
                 "Left: shows how much voltage was measured at each electrode channel — "
@@ -135,8 +168,7 @@ def layout() -> html.Div:
     )
 
 
-# ── Section building blocks ────────────────────────────────────────────────────
-
+# ── Section building blocks
 def _header() -> html.Div:
     return html.Div(
         [
@@ -270,14 +302,23 @@ def _bottom_row() -> html.Div:
                 style=_PANEL_HDR,
             ),
             html.Div(
-                dcc.Graph(
-                    id=_VOLTAGE_ID,
-                    figure=empty_figure("Loading…"),
-                    config={"displayModeBar": False, "responsive": True},
-                    style={"height": "500px", "width": "100%"},
-                ),
-                style={"padding": "6px 6px 4px"},
+                [
+                    dcc.Graph(
+                        id=_VOLTAGE_ID,
+                        figure=empty_figure("Loading…"),
+                        config={"displayModeBar": False, "responsive": True},
+                        style=_VOLTAGE_GRAPH_STYLE_NORMAL,
+                    ),
+                    html.Div(
+                        "Double-click to exit full screen",
+                        id=_VOLTAGE_HINT_ID,
+                        style=_VOLTAGE_HINT_STYLE_NORMAL,
+                    ),
+                ],
+                id=_VOLTAGE_WRAPPER_ID,
+                style=_VOLTAGE_WRAPPER_STYLE_NORMAL,
             ),
+            dcc.Store(id=_VOLTAGE_FULLSCREEN_STORE, data=False),
             html.Div(
                 [
                     html.Div(
@@ -408,7 +449,7 @@ def _image_panel(
     badge_color: str = ACCENT,
     height: int = 340,
 ) -> html.Div:
-    """Reusable card containing a single dcc.Graph."""
+    """Build a titled card that wraps a single dcc.Graph — reused for every image panel."""
     badge_text = badge if badge else title[:4]
     return html.Div(
         [
@@ -492,9 +533,7 @@ def _banner(message: str, kind: str = "info") -> html.Div:
     })
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Figure builders
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Figure builders
 
 _SEG_COLORSCALE = [
     [0.00, CLASS_COLORS[0]],
@@ -506,11 +545,11 @@ _SEG_COLORSCALE = [
 ]
 
 _DIFF_COLORSCALE = [
-    [0.0, "#7b61ff"],   # −2: A much higher (purple)
-    [0.25, "#a07bff"],   # −1
-    [0.5, "#1e1e2f"],   # 0: identical (dark background)
-    [0.75, "#f4c870"],   # +1
-    [1.0, "#e8a030"],   # +2: B much higher (gold)
+    [0.0, "#7b61ff"],   # −2  A much higher than B  (purple)
+    [0.25, "#a07bff"],  # −1  A slightly higher
+    [0.5, "#1e1e2f"],   #  0  both algorithms agree  (dark background)
+    [0.75, "#f4c870"],  # +1  B slightly higher
+    [1.0, "#e8a030"],   # +2  B much higher than A  (gold)
 ]
 
 
@@ -528,7 +567,7 @@ def _base_layout(title: str) -> dict:
 
 
 def _recon_figure(recon: np.ndarray, alg: str, level: int, sample: str) -> go.Figure:
-    """3-class segmentation heatmap for one algorithm."""
+    """Turn a segmentation array into a 3-class heatmap for one algorithm."""
     fig = go.Figure(
         go.Heatmap(
             z=recon.astype(float),
@@ -546,7 +585,7 @@ def _diff_figure(
     recon_a: np.ndarray, recon_b: np.ndarray,
     alg_a: str, alg_b: str, level: int, sample: str,
 ) -> go.Figure:
-    """Diverging pixel-class difference: A − B, range −2…+2."""
+    """Show where two algorithms disagree — purple where A is higher, gold where B is higher."""
     diff = recon_a.astype(np.int16) - recon_b.astype(np.int16)
     n_disagree = int(np.count_nonzero(diff))
     pct = n_disagree / diff.size * 100
@@ -580,19 +619,32 @@ def _diff_figure(
 _MAX_INJ_SHOWN = 8   # max injections shown per channel group
 _MAX_CH_SHOWN = 32   # max channels on x-axis before range-slider kicks in
 
+# These colors are hand-picked for a dark background (#1a1a2e) and checked for
+# colorblind-friendliness. Don't swap them out for a continuous colorscale —
+# adjacent Plasma steps look nearly identical on dark surfaces.
+_INJECTION_COLORS = [
+    "#3987e5",  # blue
+    "#199e70",  # aqua
+    "#c98500",  # yellow
+    "#008300",  # green
+    "#9085e9",  # violet
+    "#e66767",  # red
+    "#d55181",  # magenta
+    "#d95926",  # orange
+]
+
 
 def _voltage_figure(measurement) -> go.Figure:
-    """Grouped bar chart — x = channel, bars per channel = one per injection.
+    """Draw a grouped bar chart of voltage readings — one cluster per electrode channel.
 
-    Each channel gets a cluster of bars, one bar per (sampled) injection.
-    Injections are colour-coded blue→red via the Plasma palette so you can
-    immediately see how the voltage pattern shifts with the injection index.
-    A range-slider appears when there are more than _MAX_CH_SHOWN channels.
+    Each bar color is one current injection. When there are more injections or channels
+    than the chart can comfortably show, we sample evenly across the full set so the
+    chart stays readable without forcing a range-slider on small datasets.
     """
     V = measurement.voltage_matrix  # (n_inj, n_ch)
     n_inj, n_ch = V.shape
 
-    # ── Sample injections when there are more than the cap ────────────────────
+    # ── if there are too many injections, pick a representative spread
     if n_inj <= _MAX_INJ_SHOWN:
         inj_indices = list(range(n_inj))
     else:
@@ -601,7 +653,7 @@ def _voltage_figure(measurement) -> go.Figure:
             set(min(int(round(i * step)), n_inj - 1) for i in range(_MAX_INJ_SHOWN))
         )
 
-    # ── Sample channels when there are more than the cap ──────────────────────
+    # ── same idea for channels — only show up to _MAX_CH_SHOWN on the x-axis
     if n_ch <= _MAX_CH_SHOWN:
         ch_indices = list(range(n_ch))
     else:
@@ -611,14 +663,13 @@ def _voltage_figure(measurement) -> go.Figure:
         )
 
     x_labels = [f"Ch {ch + 1}" for ch in ch_indices]
-    palette = pc.sample_colorscale("Plasma", max(len(inj_indices), 2))
 
     fig = go.Figure()
 
-    # One trace per injection — all sharing the same channel x-axis positions
+    # ── one trace per injection, all plotted against the same channel x-axis
     for slot, inj_idx in enumerate(inj_indices):
         y_values = [float(V[inj_idx, ch]) for ch in ch_indices]
-        color = palette[slot]
+        color = _INJECTION_COLORS[slot % len(_INJECTION_COLORS)]
         fig.add_trace(
             go.Bar(
                 name=f"Inj {inj_idx + 1}",
@@ -626,8 +677,8 @@ def _voltage_figure(measurement) -> go.Figure:
                 y=y_values,
                 marker=dict(
                     color=color,
-                    line=dict(width=0.5, color="rgba(0,0,0,0.3)"),
-                    opacity=0.88,
+                    line=dict(width=1, color="#1a1a2e"),
+                    opacity=1.0,
                 ),
                 hovertemplate=(
                     f"<b>Injection {inj_idx + 1}</b><br>"
@@ -699,18 +750,18 @@ def _voltage_figure(measurement) -> go.Figure:
     return fig
 
 
-# ── Metrics scorecard ──────────────────────────────────────────────────────────
+# ── Metrics scorecard
 
-# (metric_key, display_label, higher_is_better, format_spec)
+# ── each tuple is  (metric_key, display_label, higher_is_better, format_spec)
 _METRIC_KEYS: list[tuple[str, str, bool, str]] = [
-    # Image Quality
+    # ── image quality
     ("ssim",                   "SSIM Score",           True,  ".3f"),
     ("ssim_min",               "Spatial SSIM (min)",   True,  ".3f"),
-    # Shape Matching
+    # ── how well the reconstructed shape matches the ground truth
     ("hausdorff",              "Hausdorff Dist (px)",  False, ".1f"),
     ("position_error",         "Position Error (px)",  False, ".1f"),
     ("resolution",             "Resolution (px)",      False, ".1f"),
-    # Class Specific
+    # ── per-class accuracy
     ("confusion_accuracy",     "Confusion Accuracy",   True,  ".3f"),
     ("iou_mean",               "Mean IoU",             True,  ".3f"),
     ("iou_water",              "IoU Water",            True,  ".3f"),
@@ -720,15 +771,15 @@ _METRIC_KEYS: list[tuple[str, str, bool, str]] = [
     ("dice_water",             "Dice Water",           True,  ".3f"),
     ("dice_resistive",         "Dice Resistive",       True,  ".3f"),
     ("dice_conductive",        "Dice Conductive",      True,  ".3f"),
-    # Data Efficiency
+    # ── how fast the algorithm runs
     ("runtime",                "Runtime (s)",          False, ".4f"),
-    # Measurement Domain
+    # ── how well the reconstruction fits the raw measurement data
     ("voltage_residual",       "Voltage Residual",     False, ".4f"),
     ("resistance_consistency", "Resistance Consist.",  True,  ".3f"),
     ("current_sensitivity",    "Current Sensitivity",  True,  ".3f"),
 ]
 
-# Row indices (into _METRIC_KEYS) where a new section header should be rendered.
+# ── row indices where we insert a section heading into the scorecard table
 _METRIC_SECTIONS: dict[int, str] = {
     0:  "Image Quality",
     2:  "Shape Matching",
@@ -739,24 +790,21 @@ _METRIC_SECTIONS: dict[int, str] = {
 
 _EXPECTED_METRIC_KEYS: set[str] = {key for key, *_ in _METRIC_KEYS}
 
-# Measurement-domain metrics were rewritten to be reconstruction-dependent
-# (Born forward surrogate). Any cached value that still matches the legacy
-# saturated pattern is treated as stale and recomputed.
+# ── measurement-domain metrics went through two formula revisions; any cached
+# ── values matching the old saturation pattern need to be recomputed on load
 _MEASUREMENT_DOMAIN_KEYS: tuple[str, ...] = (
     "voltage_residual", "resistance_consistency", "current_sensitivity",
 )
 
 
 def _measurement_domain_is_stale(metrics: dict) -> bool:
-    """True if the cached measurement-domain triple looks like an older formula.
+    """Check if cached measurement-domain values look like they came from an older formula.
 
-    Legacy formula  : voltage_residual >= 0.98, resistance_consistency == 0,
-                      current_sensitivity == 0  (clip-to-zero saturation).
-    First rewrite   : resistance_consistency and current_sensitivity used
-                      ``clip(r, 0, 1)`` so values landed in [0, 1] with many
-                      exact 0.0s. The current version rescales correlations
-                      via ``(r+1)/2`` so no honest cached value should be
-                      < 0.05 unless something is severely wrong.
+    We've had two rounds of bugs here:
+      - Original version: voltage_residual saturated at 0.98, others zeroed out.
+      - First rewrite: used clip(r, 0, 1) so many values were exact 0.0.
+      - Current version: maps correlation via (r+1)/2 so honest values are always >= 0.05.
+    If anything looks like the old pattern, we flag it for recomputation.
     """
     vr = metrics.get("voltage_residual")
     rc = metrics.get("resistance_consistency")
@@ -771,15 +819,12 @@ def _measurement_domain_is_stale(metrics: dict) -> bool:
 
 
 def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
-    """Return metrics from cache, augmenting any keys missing from older cache entries.
+    """Pull metrics from cache, filling in anything that's missing or stale.
 
-    Flow:
-      1. Cache hit → use cached metrics, but if the entry pre-dates a newer
-         metric (Dice, measurement-domain, etc.) recompute the missing scalars
-         from the cached reconstruction and persist them back. The adapter is
-         never re-run.
-      2. Cache miss → fall back to the full MetricsEngine.compute_all path,
-         which will invoke the adapter if necessary.
+    If the cache has a result, we check whether it predates newer metrics (Dice,
+    updated measurement-domain formulas, etc.) and recompute just the missing or
+    stale keys without re-running the full adapter. If there's no cached result
+    at all, we run the full pipeline from scratch.
     """
     metrics: dict | None = None
     reconstruction = None
@@ -792,7 +837,7 @@ def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
     except Exception:
         metrics = None
 
-    # Full cache miss → compute from scratch
+    # ── nothing in cache at all — run the full pipeline
     if metrics is None:
         try:
             measurement = _LOADER.load(level=level, sample=sample)
@@ -807,9 +852,8 @@ def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
             )
             return None
 
-    # Cache hit → backfill any missing keys without re-running the adapter.
-    # Also drop legacy saturated measurement-domain values so the new
-    # surrogate-based formula overwrites them.
+    # ── cache hit — fill in any keys added after this entry was written,
+    # ── and drop stale measurement-domain values from the old formula
     missing = _EXPECTED_METRIC_KEYS - set(metrics.keys())
     if _measurement_domain_is_stale(metrics):
         missing |= set(_MEASUREMENT_DOMAIN_KEYS)
@@ -849,7 +893,7 @@ def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
 def _scorecard_children(
     level: int, sample: str, selected_alg: str
 ) -> list:
-    """Build the metrics scorecard table rows."""
+    """Build the scorecard table that compares all three algorithms side by side."""
     all_metrics: dict[str, dict | None] = {
         alg: _try_load_metrics(alg, level, sample) for alg in _ALGORITHMS
     }
@@ -859,7 +903,7 @@ def _scorecard_children(
 
     rows: list = []
 
-    # ── Header row ────────────────────────────────────────────────────────────
+    # ── header row with one column per algorithm
     header_cells = [
         html.Th("Metric", style=_th_style()),
     ] + [
@@ -876,9 +920,9 @@ def _scorecard_children(
     ]
     rows.append(html.Tr(header_cells))
 
-    # ── Data rows ─────────────────────────────────────────────────────────────
+    # ── one data row per metric, with section headings inserted between groups
     for idx, (key, label, higher_better, fmt) in enumerate(_METRIC_KEYS):
-        # Section header
+        # ── insert a section heading before the first metric in each group
         if idx in _METRIC_SECTIONS:
             rows.append(html.Tr(html.Td(
                 _METRIC_SECTIONS[idx].upper(),
@@ -893,7 +937,7 @@ def _scorecard_children(
                 },
             )))
 
-        # Collect values
+        # ── gather values for all three algorithms
         vals: dict[str, float | None] = {
             alg: (all_metrics[alg].get(key) if all_metrics[alg] else None)
             for alg in _ALGORITHMS
@@ -983,13 +1027,11 @@ def _td_style(is_best: bool, is_selected: bool) -> dict:
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Data loading helpers
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Data loading helpers
 
 def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None:
-    """Try cache first, then fall back to ReferenceOutputAdapter."""
-    # 1. Cache
+    """Grab a reconstruction array — check the cache first, run the adapter if it's not there."""
+    # ── 1. try the cache
     try:
         from ktc_vis.cache.hdf5_store import load_result
         _, recon = load_result(alg, level, sample, cache_path=_CACHE_PATH)
@@ -997,7 +1039,7 @@ def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None
     except Exception:
         pass
 
-    # 2. Live adapter
+    # ── 2. cache miss — run the live adapter
     try:
         measurement = _LOADER.load(level=level, sample=sample)
         adapter = _get_adapter(alg)
@@ -1007,14 +1049,13 @@ def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None
         return None
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Callbacks
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Callbacks
+
 
 def register_callbacks(app) -> None:  # noqa: ANN001
-    """Wire sidebar selectors to all M3 panels."""
+    """Hook up all the Dash callbacks that keep M3 panels in sync with the sidebar."""
 
-    # Flat output list: recon figures + diff figures + voltage + scorecard + chips + banner
+    # ── collect every output in one flat list so the callback signature stays clean
     recon_outputs = [Output(_RECON_IDS[alg], "figure") for alg in _ALGORITHMS]
     diff_outputs = [Output(_DIFF_IDS[pair], "figure") for pair in _DIFF_PAIRS]
     other_outputs = [
@@ -1035,7 +1076,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
     def _update_all(level: int, sample: str, selected_alg: str):
         level = int(level)
 
-        # ── 1. Load measurement (needed for voltage chart) ────────────────────
+        # ── 1. load the measurement file — needed for the voltage chart
         measurement = None
         banner = None
         try:
@@ -1047,14 +1088,14 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             logger.exception("M3 measurement load failed")
             banner = _banner(f"Measurement load error: {exc}", "warn")
 
-        # ── 2. Load all three reconstructions ─────────────────────────────────
+        # ── 2. load all three reconstructions in parallel dict
         recons: dict[str, np.ndarray | None] = {
             alg: _load_reconstruction(alg, level, sample)
             for alg in _ALGORITHMS
         }
         n_loaded = sum(1 for v in recons.values() if v is not None)
 
-        # ── 3. Build reconstruction figures ───────────────────────────────────
+        # ── 3. build a figure for each algorithm's reconstruction
         recon_figs = []
         for alg in _ALGORITHMS:
             r = recons[alg]
@@ -1065,7 +1106,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     empty_figure(f"No data for {alg.upper()}\nRun benchmark")
                 )
 
-        # ── 4. Build pairwise difference figures ──────────────────────────────
+        # ── 4. build pairwise difference figures for all three pairs
         diff_figs = []
         for alg_a, alg_b in _DIFF_PAIRS:
             ra = recons[alg_a]
@@ -1080,7 +1121,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     empty_figure(f"Missing: {missing.upper()}")
                 )
 
-        # ── 5. Voltage figure ─────────────────────────────────────────────────
+        # ── 5. voltage bar chart from the raw measurement data
         if measurement is not None:
             try:
                 voltage_fig = _voltage_figure(measurement)
@@ -1090,10 +1131,10 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         else:
             voltage_fig = empty_figure("Measurement data unavailable")
 
-        # ── 6. Scorecard ──────────────────────────────────────────────────────
+        # ── 6. scorecard table with all metric rows
         scorecard = _scorecard_children(level, sample, selected_alg)
 
-        # ── 7. Chips ──────────────────────────────────────────────────────────
+        # ── 7. status chips along the top of the module
         chips = [
             _chip("level", f"L{level}", accent=WARN),
             _chip("sample", sample.upper(), accent="#cfe0ff"),
@@ -1106,7 +1147,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                 _chip("injections", str(n_inj)),
                 _chip("V channels", str(n_ch)),
             ]
-        # Per-algorithm agreement chips
+        # ── per-algorithm pixel agreement against the ground truth
         if measurement is not None:
             gt = measurement.ground_truth.astype(np.uint8)
             for alg in _ALGORITHMS:
@@ -1115,7 +1156,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     agr = float((r == gt).mean()) * 100.0
                     chips.append(
                         _chip(
-                            alg.upper(),
+                            f"{alg.upper()} pixel agreement",
                             f"{agr:.1f}%",
                             accent=SUCCESS if agr >= 90 else (
                                 WARN if agr >= 70 else DANGER
@@ -1124,3 +1165,62 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                     )
 
         return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
+
+    # ── full-screen toggle for the voltage chart on double-click ──────────────
+    # Plotly fires a relayout event with xaxis.autorange + yaxis.autorange = True
+    # whenever the user double-clicks anywhere on the chart. We treat that as a
+    # reliable toggle signal and flip the wrapper div between an inline box and a
+    # fixed full-viewport overlay, then nudge Plotly to resize its canvas.
+    app.clientside_callback(
+        """
+        function(relayoutData, isFull) {
+            const isResetEvent = relayoutData
+                && Object.keys(relayoutData).length === 2
+                && relayoutData['xaxis.autorange'] === true
+                && relayoutData['yaxis.autorange'] === true;
+            if (!isResetEvent) {
+                return [
+                    window.dash_clientside.no_update,
+                    window.dash_clientside.no_update,
+                    window.dash_clientside.no_update,
+                    window.dash_clientside.no_update,
+                ];
+            }
+
+            const nowFull = !isFull;
+            const wrapperStyle = nowFull
+                ? %(wrapper_full)s
+                : %(wrapper_normal)s;
+            const graphStyle = nowFull
+                ? %(graph_full)s
+                : %(graph_normal)s;
+            const hintStyle = nowFull
+                ? %(hint_full)s
+                : %(hint_normal)s;
+
+            setTimeout(function() {
+                const graphDiv = document.getElementById('%(graph_id)s');
+                if (graphDiv && window.Plotly) {
+                    window.Plotly.Plots.resize(graphDiv);
+                }
+            }, 60);
+
+            return [nowFull, wrapperStyle, graphStyle, hintStyle];
+        }
+        """ % {
+            "wrapper_full": json.dumps(_VOLTAGE_WRAPPER_STYLE_FULL),
+            "wrapper_normal": json.dumps(_VOLTAGE_WRAPPER_STYLE_NORMAL),
+            "graph_full": json.dumps(_VOLTAGE_GRAPH_STYLE_FULL),
+            "graph_normal": json.dumps(_VOLTAGE_GRAPH_STYLE_NORMAL),
+            "hint_full": json.dumps(_VOLTAGE_HINT_STYLE_FULL),
+            "hint_normal": json.dumps(_VOLTAGE_HINT_STYLE_NORMAL),
+            "graph_id": _VOLTAGE_ID,
+        },
+        Output(_VOLTAGE_FULLSCREEN_STORE, "data"),
+        Output(_VOLTAGE_WRAPPER_ID, "style"),
+        Output(_VOLTAGE_ID, "style"),
+        Output(_VOLTAGE_HINT_ID, "style"),
+        Input(_VOLTAGE_ID, "relayoutData"),
+        State(_VOLTAGE_FULLSCREEN_STORE, "data"),
+        prevent_initial_call=True,
+    )

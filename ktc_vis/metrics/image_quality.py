@@ -1,4 +1,4 @@
-#SSIM metrics.
+# SSIM metrics.
 
 import numpy as np
 from skimage.metrics import structural_similarity

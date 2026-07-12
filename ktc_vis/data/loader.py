@@ -7,7 +7,6 @@ Reads the canonical staged dataset under ``data/raw/ktc2023/``:
     ground_truth/true{1..4}.mat   — segmentation (key: truth, 256×256 uint8)
 """
 
-from ast import Load
 from pathlib import Path
 
 import numpy as np
@@ -99,7 +98,7 @@ class KTCDataLoader:
 
     @staticmethod
     def _load_mat(path: Path) -> dict:
-        #Load a .mat file, raising :class:`FileNotFoundError` with guidance.
+        # Load a .mat file, raising :class:`FileNotFoundError` with guidance.
         if not path.exists():
             raise FileNotFoundError(
                 f"KTC2023 data file not found: {path}\n"
