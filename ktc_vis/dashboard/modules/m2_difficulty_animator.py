@@ -1,4 +1,4 @@
-"""Module 2: Difficulty Animator. Owner: Asmita Bhuva."""
+# Module 2: Difficulty Animator.
 
 from pathlib import Path
 
@@ -48,7 +48,7 @@ _GT_COLORSCALE_3 = [
 
 
 def layout() -> html.Div:
-    """Builds the full page layout: header, controls, image panels, metric curves, and the live commentary block."""
+    # Level animator: ground truth images + degradation curves across levels 1–7.
     return html.Div([
 
         html.Div([
@@ -283,7 +283,7 @@ def _curve_card(title: str, graph_id: str, description: str = "") -> html.Div:
 
 
 def _gt_figure(level: int, sample: str) -> go.Figure:
-    """Reads the ground truth .mat file for the given sample and returns a 3-class heatmap."""
+    # Load ground truth .mat and return a Plotly heatmap figure.
     idx = SAMPLE_MAP.get(sample, 1)
     mat_path = RAW_DIR / "ground_truth" / f"true{idx}.mat"
 
@@ -354,7 +354,7 @@ _LOG_Y_RANGE: dict[str, tuple[float, float] | None] = {
 
 def _curve_figure(metric: str, algorithm: str, sample: str,
                   current_level: int = 1) -> go.Figure:
-    """Loads metric values from the HDF5 cache and plots them as a line across levels 1-7. Falls back to a placeholder if the cache is missing or all-zero."""
+    # Try to load metric values from HDF5 cache; show placeholder if unavailable.
     values = _try_load_from_cache(metric, algorithm, sample)
 
     if values is not None:
@@ -428,7 +428,7 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
 
 
 def _dice_curve_figure(algorithm: str, sample: str, current_level: int = 1) -> go.Figure:
-    """Computes Dice from cached IoU values (2*IoU / (1+IoU)) and hands off to _curve_figure_from_values."""
+    # Compute Dice from cached IoU (dice = 2·IoU / (1 + IoU)) and plot as a curve.
     iou_vals = _try_load_from_cache("iou_mean", algorithm, sample)
     if iou_vals is not None:
         dice_vals = [2 * v / (1 + v) if (1 + v) != 0 else 0.0 for v in iou_vals]
@@ -441,7 +441,7 @@ def _curve_figure_from_values(
     values: list | None, algorithm: str, sample: str, current_level: int = 1,
     metric: str | None = None,
 ) -> go.Figure:
-    """Same as _curve_figure but takes pre-computed values instead of a metric key, useful for derived metrics like Dice."""
+    # Like _curve_figure but accepts pre-computed values instead of a metric name.
     fig = go.Figure()
     annotation = []
     if values is not None:
@@ -485,7 +485,7 @@ def _curve_figure_from_values(
 def _recon_and_error_figures(
     level: int, sample: str, algorithm: str
 ) -> tuple[go.Figure, go.Figure]:
-    """Loads the cached reconstruction for the given algorithm/level/sample and builds both the segmentation heatmap and the pixel-level error overlay."""
+    # Return reconstruction and error overlay figures from cache, or placeholders.
     try:
         from ktc_vis.cache.hdf5_store import load_result
         _, recon = load_result(algorithm, level, sample, cache_path=_CACHE_PATH)
@@ -528,7 +528,7 @@ def _recon_and_error_figures(
 
 
 def _try_load_from_cache(metric: str, algorithm: str, sample: str):
-    """Tries to read a metric's values for all 7 levels from the HDF5 cache. Returns a list of 7 floats, or None if anything is missing."""
+    # Return list of metric values for levels 1-7, or None if cache unavailable.
     try:
         import h5py
         if not _CACHE_PATH.exists():
@@ -787,7 +787,7 @@ def _summary_sentence(
 
 
 def register_callbacks(app) -> None:  # noqa: ANN001
-    """Register all M2 callbacks."""
+    # Register all M2 callbacks.
 
     @app.callback(
         Output("m2-interval", "disabled"),
