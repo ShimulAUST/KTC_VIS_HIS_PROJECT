@@ -297,8 +297,11 @@ def _bottom_row() -> html.Div:
                                              "fontSize": "13.5px"}),
                         ]
                     ),
-                    html.Span("voltage at each channel · one colour per injection · up to 8 injections shown",
-                              style={"color": MUTED, "fontSize": "11.5px"}),
+                    html.Span(
+                        "voltage at each channel · one colour per injection "
+                        "· up to 8 injections shown",
+                        style={"color": MUTED, "fontSize": "11.5px"},
+                    ),
                 ],
                 style=_PANEL_HDR,
             ),
@@ -548,7 +551,7 @@ _SEG_COLORSCALE = [
 _DIFF_COLORSCALE = [
     [0.0, "#7b61ff"],   # −2  A much higher than B  (purple)
     [0.25, "#a07bff"],  # −1  A slightly higher
-    [0.5, "#1e1e2f"],   #  0  both algorithms agree  (dark background)
+    [0.5, "#1e1e2f"],   # 0  both algorithms agree  (dark background)
     [0.75, "#f4c870"],  # +1  B slightly higher
     [1.0, "#e8a030"],   # +2  B much higher than A  (gold)
 ]
@@ -781,9 +784,9 @@ _METRIC_KEYS: list[tuple[str, str, bool, str]] = [
 
 # row indices where we insert a section heading into the scorecard table
 _METRIC_SECTIONS: dict[int, str] = {
-    0:  "Image Quality",
-    2:  "Shape Matching",
-    5:  "Class Specific",
+    0: "Image Quality",
+    2: "Shape Matching",
+    5: "Class Specific",
     14: "Data Efficiency",
     15: "Measurement Domain",
 }
@@ -990,7 +993,8 @@ def _scorecard_children(
             },
         ),
         html.P(
-            f"★ = best for that metric · highlighted column = sidebar selection ({selected_alg.upper()})",
+            f"★ = best for that metric · highlighted column = sidebar selection "
+            f"({selected_alg.upper()})",
             style={"color": MUTED, "fontSize": "10px", "marginTop": "10px"},
         ),
     ]

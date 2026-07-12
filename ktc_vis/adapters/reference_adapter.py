@@ -76,7 +76,8 @@ class ReferenceOutputAdapter(AlgorithmAdapter):
             raise FileNotFoundError(
                 f"reference reconstruction not found: {leveled}\n"
                 "To use pre-computed reference outputs: run 'python scripts/stage_dataset.py'\n"
-                "To run algorithms yourself and populate the cache: run 'python scripts/run_benchmark.py'"
+                "To run algorithms yourself and populate the cache: "
+                "run 'python scripts/run_benchmark.py'"
             )
 
         mat = scipy.io.loadmat(str(path))

@@ -1,4 +1,4 @@
-"""Abstract adapter interface. Owner: Muzammal."""
+# Abstract adapter interface.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -8,7 +8,7 @@ import numpy as np
 
 @dataclass
 class KTCMeasurement:
-    """Container for one KTC2023 measurement loaded from a .mat file."""
+    # Container for one KTC2023 measurement loaded from a .mat file.
 
     current_matrix: np.ndarray    # (n_injections, n_electrodes)
     voltage_matrix: np.ndarray    # (n_injections, n_measurements)
@@ -21,20 +21,16 @@ class KTCMeasurement:
 class AlgorithmAdapter(ABC):
     """Base class for all EIT reconstruction algorithm adapters.
 
-    Each concrete adapter wraps a Docker container that runs one of the
-    KTC2023 competition algorithms.  The adapter is responsible for:
-      1. Writing the measurement data to a temporary host directory.
-      2. Invoking `docker run` with the correct volume mounts and command.
-      3. Reading the output reconstruction back from the host directory.
-      4. Returning a 256×256 uint8 array with values in {0, 1, 2}.
-
-    Args:
-        timeout: Seconds before docker run is killed (default 600).
-        stream:  If True, stream docker stdout/stderr to the terminal.
+      The adapter is responsible for:
+        1. Writing the measurement data to a temporary host directory.
+        2. Invoking `docker run` with the correct volume mounts and command.
+        3. Reading the output reconstruction back from the host directory.
+        4. Returning a 256×256 uint8 array with values in {0, 1, 2}.
     """
 
     name: str  # Short identifier used in HDF5 cache keys and UI labels
-    supports_level_batching: bool = False  # Override in adapters that can process a whole level at once
+    # Override in adapters that can process a whole level at once
+    supports_level_batching: bool = False
 
     def __init__(self, timeout: int = 600, stream: bool = False) -> None:
         self.timeout = timeout
@@ -42,25 +38,14 @@ class AlgorithmAdapter(ABC):
 
     @abstractmethod
     def reconstruct(self, measurement: KTCMeasurement) -> np.ndarray:
-        """Run reconstruction for a single measurement.
-
-        Args:
-            measurement: Loaded KTC2023 measurement for one (level, sample).
-
-        Returns:
-            256×256 uint8 ndarray with pixel values in {0=water, 1=resistive,
-            2=conductive}.
+        """ Run reconstruction for a single measurement.
+            Returns: 256×256 uint8 ndarray with pixel values in
+            {0=water, 1=resistive, 2=conductive}.
         """
 
     def reconstruct_level(
         self, level: int, samples: list[str]
     ) -> dict[str, np.ndarray]:
-        """Run reconstruction for all samples at a given level in one docker call.
-
-        Default implementation calls reconstruct() per sample (no batching).
-        Override in adapters where the container already processes all samples.
-
-        Returns:
-            Dict mapping sample identifier → 256×256 uint8 ndarray.
-        """
+        # Run reconstruction for all samples at a given level in one docker call.
+        # Returns: Dict mapping sample identifier → 256×256 uint8 ndarray.
         raise NotImplementedError("This adapter does not support level batching.")

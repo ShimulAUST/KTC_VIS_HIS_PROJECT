@@ -42,16 +42,12 @@ class KTCDataLoader:
 
     def load(self, level: int, sample: str) -> KTCMeasurement:
         """Load one ``(level, sample)`` combination from disk.
-
-        Level-1 data is read directly. Levels 2–7 are produced by subsampling
-        the Level-1 measurement at runtime.
-
         Args:
             level: Difficulty level, 1–7.
             sample: Sample identifier, one of ``"a"``, ``"b"``, ``"c"``, ``"d"``.
 
         Returns:
-            :class:`KTCMeasurement` with all matrices populated.
+            class:`KTCMeasurement` with all matrices populated.
 
         Raises:
             ValueError: If ``level`` or ``sample`` is invalid.

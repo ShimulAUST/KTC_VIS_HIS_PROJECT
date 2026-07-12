@@ -1,4 +1,4 @@
-"""Module 2: Difficulty Animator. Owner: Asmita Bhuva."""
+# Module 2: Difficulty Animator.
 
 from pathlib import Path
 
@@ -48,7 +48,7 @@ _GT_COLORSCALE_3 = [
 
 
 def layout() -> html.Div:
-    """Builds the full page layout: header, controls, image panels, metric curves, and the live commentary block."""
+    # Level animator: ground truth images + degradation curves across levels 1–7.
     return html.Div([
 
         html.Div([
@@ -66,10 +66,10 @@ def layout() -> html.Div:
             html.P(
                 "KTC2023 has seven difficulty levels created by progressively removing electrodes "
                 "(from 32 down to 20) and cutting the voltage measurements from 2356 to 513. "
-                "Use the slider or hit ▶ Play to step through the levels and see how reconstruction "
-                "quality holds up as data gets sparser. "
-                "The curves below track each metric across all seven levels so you can tell whether "
-                "an algorithm degrades smoothly or falls apart at a particular point.",
+                "Use the slider or hit ▶ Play to step through the levels and see how "
+                "reconstruction quality holds up as data gets sparser. "
+                "The curves below track each metric across all seven levels so you can "
+                "tell whether an algorithm degrades smoothly or falls apart at a particular point.",
                 style={"color": MUTED, "margin": "8px 0 0", "fontSize": "13px",
                        "lineHeight": "1.6"},
             ),
@@ -96,7 +96,8 @@ def layout() -> html.Div:
                         "marginRight": "10px",
                     }),
                     html.Span(
-                        "Drag to jump to any level, or press ▶ Play to animate levels 1 → 7 → 1 in a loop.",
+                        "Drag to jump to any level, or press ▶ Play to animate "
+                        "levels 1 → 7 → 1 in a loop.",
                         style={"color": MUTED, "fontSize": "11px"},
                     ),
                 ], style={"marginBottom": "8px"}),
@@ -130,36 +131,44 @@ def layout() -> html.Div:
 
         _section_label(
             "Visual Comparison",
-            "Side-by-side ground truth and reconstruction at the selected level. The error overlay shows exactly where the algorithm got it wrong.",
+            "Side-by-side ground truth and reconstruction at the selected level. "
+            "The error overlay shows exactly where the algorithm got it wrong.",
         ),
 
         html.Div([
             _image_card("Ground Truth", "m2-gt-graph",
-                        "The real phantom used for this sample, fixed regardless of difficulty level."),
+                        "The real phantom used for this sample, "
+                        "fixed regardless of difficulty level."),
             _image_card("Segmentation", "m2-recon-graph",
                         "The algorithm's segmentation output for this level and sample."),
             _image_card("Error Overlay", "m2-error-graph",
-                        "Where it got it right and wrong. Green = correct, red = false positive, orange = wrong class, blue = missed."),
+                        "Where it got it right and wrong. Green = correct, red = false positive, "
+                        "orange = wrong class, blue = missed."),
         ], style={"display": "flex", "gap": "12px", "marginBottom": "20px"}),
 
         _section_label(
             "Degradation Curves",
-            "How each metric changes as measurement data is progressively removed. The yellow marker tracks whichever level you have selected.",
+            "How each metric changes as measurement data is progressively removed. "
+            "The yellow marker tracks whichever level you have selected.",
         ),
 
         html.Div([
             _curve_card("SSIM (higher is better, range 0–1)",
                         "m2-ssim-graph",
-                        "Measures how structurally similar the reconstruction is to the ground truth "
-                        "by looking at luminance, contrast, and local patterns. "
-                        "This is the official KTC2023 ranking metric, so it's the one that matters most for comparison."),
+                        "Measures how structurally similar the reconstruction is to the "
+                        "ground truth by looking at luminance, contrast, and local patterns. "
+                        "This is the official KTC2023 ranking metric, so it's the one that matters "
+                        "most for comparison."),
             _curve_card("Mean IoU (higher is better, range 0–1)",
                         "m2-iou-graph",
-                        "Intersection-over-Union averaged over all three tissue classes (water, resistive, conductive). "
-                        "It penalises missing regions and false positives equally, so you can't cheat it by over-segmenting."),
+                        "Intersection-over-Union averaged over all three tissue classes "
+                        "(water, resistive, conductive). "
+                        "It penalises missing regions and false positives equally, "
+                        "so you can't cheat it by over-segmenting."),
             _curve_card("Dice Score (higher is better, range 0–1)",
                         "m2-dice-graph",
-                        "Computed from IoU as 2*IoU / (1+IoU), which is equivalent to the F1 score for segmentation. "
+                        "Computed from IoU as 2*IoU / (1+IoU), which is equivalent to the F1 score "
+                        "for segmentation. "
                         "Tends to be more sensitive to small inclusions than raw IoU."),
         ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
@@ -167,24 +176,29 @@ def layout() -> html.Div:
             _curve_card("Hausdorff Distance in pixels (lower is better)",
                         "m2-hausdorff-graph",
                         "The worst-case gap between predicted and true inclusion boundaries. "
-                        "A single badly placed pixel can spike this number, so it's a good stress test for algorithms "
-                        "that occasionally smear or drop inclusions."),
+                        "A single badly placed pixel can spike this number, so it's a good stress "
+                        "test for algorithms that occasionally smear or drop inclusions."),
             _curve_card("Position Error in pixels (lower is better)",
                         "m2-poserr-graph",
-                        "How far the predicted inclusion centre is from the true centre, in pixels. "
-                        "Tells you whether the algorithm finds inclusions in roughly the right place, even if the shape is off."),
+                        "How far the predicted inclusion centre is from the true centre, "
+                        "in pixels. "
+                        "Tells you whether the algorithm finds inclusions in roughly the "
+                        "right place, even if the shape is off."),
             _curve_card("Resolution in pixels (smaller = finer detail)",
                         "m2-resolution-graph",
                         "Smallest inclusion diameter the algorithm manages to resolve. "
-                        "Goes up as measurement data gets sparser and fine structures start to blur together."),
+                        "Goes up as measurement data gets sparser and fine structures "
+                        "start to blur."),
         ], style={"display": "flex", "gap": "12px", "marginBottom": "12px"}),
 
         html.Div([
             _curve_card("Runtime (lower is faster, log scale per algorithm)",
                         "m2-runtime-graph",
-                        "How long it actually takes to produce one reconstruction, shown on a log scale so differences "
-                        "are visible within each algorithm. Typical ballparks: ABC1 around 22 s, PNPE2E around 42 s, "
-                        "CUQI8 roughly 100 minutes. CUQI8 numbers are estimated from a 48-hour batch run, see runtime_log.md for details."),
+                        "How long it actually takes to produce one reconstruction, shown on a log "
+                        "scale so differences are visible within each algorithm. "
+                        "Typical ballparks: ABC1 around 22 s, PNPE2E around 42 s, "
+                        "CUQI8 roughly 100 minutes. CUQI8 numbers are estimated from a 48-hour "
+                        "batch run, see runtime_log.md for details."),
         ], style={"display": "flex", "gap": "12px", "marginBottom": "20px"}),
 
         _section_label(
@@ -283,7 +297,7 @@ def _curve_card(title: str, graph_id: str, description: str = "") -> html.Div:
 
 
 def _gt_figure(level: int, sample: str) -> go.Figure:
-    """Reads the ground truth .mat file for the given sample and returns a 3-class heatmap."""
+    # Load ground truth .mat and return a Plotly heatmap figure.
     idx = SAMPLE_MAP.get(sample, 1)
     mat_path = RAW_DIR / "ground_truth" / f"true{idx}.mat"
 
@@ -354,12 +368,13 @@ _LOG_Y_RANGE: dict[str, tuple[float, float] | None] = {
 
 def _curve_figure(metric: str, algorithm: str, sample: str,
                   current_level: int = 1) -> go.Figure:
-    """Loads metric values from the HDF5 cache and plots them as a line across levels 1-7. Falls back to a placeholder if the cache is missing or all-zero."""
+    # Try to load metric values from HDF5 cache; show placeholder if unavailable.
     values = _try_load_from_cache(metric, algorithm, sample)
 
     if values is not None:
         if metric == "runtime":
-            # Reference-output cache stores ~0s; only treat as real if any sample is meaningfully above zero.
+            # Reference-output cache stores ~0s; only treat as real if any sample
+            # is meaningfully above zero.
             if max(values) < _RUNTIME_REAL_THRESHOLD_S:
                 values = None
         elif all(v == 0.0 for v in values):
@@ -428,7 +443,7 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
 
 
 def _dice_curve_figure(algorithm: str, sample: str, current_level: int = 1) -> go.Figure:
-    """Computes Dice from cached IoU values (2*IoU / (1+IoU)) and hands off to _curve_figure_from_values."""
+    # Compute Dice from cached IoU (dice = 2·IoU / (1 + IoU)) and plot as a curve.
     iou_vals = _try_load_from_cache("iou_mean", algorithm, sample)
     if iou_vals is not None:
         dice_vals = [2 * v / (1 + v) if (1 + v) != 0 else 0.0 for v in iou_vals]
@@ -441,7 +456,7 @@ def _curve_figure_from_values(
     values: list | None, algorithm: str, sample: str, current_level: int = 1,
     metric: str | None = None,
 ) -> go.Figure:
-    """Same as _curve_figure but takes pre-computed values instead of a metric key, useful for derived metrics like Dice."""
+    # Like _curve_figure but accepts pre-computed values instead of a metric name.
     fig = go.Figure()
     annotation = []
     if values is not None:
@@ -485,7 +500,7 @@ def _curve_figure_from_values(
 def _recon_and_error_figures(
     level: int, sample: str, algorithm: str
 ) -> tuple[go.Figure, go.Figure]:
-    """Loads the cached reconstruction for the given algorithm/level/sample and builds both the segmentation heatmap and the pixel-level error overlay."""
+    # Return reconstruction and error overlay figures from cache, or placeholders.
     try:
         from ktc_vis.cache.hdf5_store import load_result
         _, recon = load_result(algorithm, level, sample, cache_path=_CACHE_PATH)
@@ -528,7 +543,7 @@ def _recon_and_error_figures(
 
 
 def _try_load_from_cache(metric: str, algorithm: str, sample: str):
-    """Tries to read a metric's values for all 7 levels from the HDF5 cache. Returns a list of 7 floats, or None if anything is missing."""
+    # Return list of metric values for levels 1-7, or None if cache unavailable.
     try:
         import h5py
         if not _CACHE_PATH.exists():
@@ -623,7 +638,8 @@ def _trend_text(current: float, prev: float, metric: str, higher_is_better: bool
     return f"{metric} {sentiment} {direction}{pct:.1f}% (was {prev:.3f})"
 
 
-# assembles the full Level Analysis panel: hardware context, per-metric badges, and the summary sentence
+# assembles the full Level Analysis panel: hardware context, per-metric badges,
+# and the summary sentence
 def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     meta = _LEVEL_META[level]
     prev_meta = _LEVEL_META.get(level - 1)
@@ -642,7 +658,8 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
         elec_lost = prev_meta["electrodes"] - meta["electrodes"]
         meas_lost = prev_meta["measurements"] - meta["measurements"]
         context_parts.append(html.Span(
-            f"  ({elec_lost} fewer electrode(s), {meas_lost} fewer measurements than Level {level - 1})",
+            f"  ({elec_lost} fewer electrode(s), {meas_lost} fewer measurements "
+            f"than Level {level - 1})",
             style={"color": MUTED, "fontSize": "12px"},
         ))
 
@@ -671,7 +688,8 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if ssim_vals and idx < len(ssim_vals):
         v = ssim_vals[idx]
         label, color = _ssim_label(v)
-        line = [_badge(label, color), html.Span(f"SSIM = {v:.3f}", style={"color": TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(
+            f"SSIM = {v:.3f}", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - ssim_vals[prev_idx]
             pct = delta / ssim_vals[prev_idx] * 100 if ssim_vals[prev_idx] != 0 else 0
@@ -684,7 +702,8 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if iou_vals and idx < len(iou_vals):
         v = iou_vals[idx]
         label, color = _iou_label(v)
-        line = [_badge(label, color), html.Span(f"Mean IoU = {v:.3f}", style={"color": TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(
+            f"Mean IoU = {v:.3f}", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - iou_vals[prev_idx]
             pct = delta / iou_vals[prev_idx] * 100 if iou_vals[prev_idx] != 0 else 0
@@ -697,7 +716,8 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if hd_vals and idx < len(hd_vals):
         v = hd_vals[idx]
         label, color = _hausdorff_label(v)
-        line = [_badge(label, color), html.Span(f"Hausdorff = {v:.1f} px", style={"color": TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(
+            f"Hausdorff = {v:.1f} px", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - hd_vals[prev_idx]
             pct = delta / hd_vals[prev_idx] * 100 if hd_vals[prev_idx] != 0 else 0
@@ -710,7 +730,8 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if pe_vals and idx < len(pe_vals):
         v = pe_vals[idx]
         label, color = _poserr_label(v)
-        line = [_badge(label, color), html.Span(f"Position error = {v:.1f} px", style={"color": TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(
+            f"Position error = {v:.1f} px", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - pe_vals[prev_idx]
             pct = delta / pe_vals[prev_idx] * 100 if pe_vals[prev_idx] != 0 else 0
@@ -723,12 +744,14 @@ def _build_commentary(level: int, algorithm: str, sample: str) -> list:
     if res_vals and idx < len(res_vals):
         v = res_vals[idx]
         label, color = _resolution_label(v)
-        line = [_badge(label, color), html.Span(f"Resolution = {v:.0f} px", style={"color": TEXT, "fontSize": "12px"})]
+        line = [_badge(label, color), html.Span(
+            f"Resolution = {v:.0f} px", style={"color": TEXT, "fontSize": "12px"})]
         if prev_idx >= 0:
             delta = v - res_vals[prev_idx]
             pct = delta / res_vals[prev_idx] * 100 if res_vals[prev_idx] != 0 else 0
             arrow = "↑" if delta > 0 else "↓"
-            color2 = "#ef5350" if delta > 0 else "#4caf50"  # larger smallest-detected = worse detail
+            # larger smallest-detected = worse detail
+            color2 = "#ef5350" if delta > 0 else "#4caf50"
             line.append(html.Span(f"  {arrow} {abs(pct):.1f}% vs L{level - 1}",
                                   style={"color": color2, "fontSize": "11px"}))
         metric_items.append(html.Li(line, style={"marginBottom": "4px"}))
@@ -768,26 +791,51 @@ def _summary_sentence(
     if drop_levels:
         cliff = drop_levels[0]
         if level == cliff:
-            cliff_str = f" This is the level where {alg} crosses below acceptable quality (SSIM < 0.60)."
+            cliff_str = (
+                f" This is the level where {alg} crosses below acceptable quality "
+                "(SSIM < 0.60)."
+            )
         elif level > cliff:
             cliff_str = f" {alg} dropped below acceptable quality at Level {cliff}."
 
     if ssim >= 0.85:
-        base = f"{alg} performs excellently at Level {level}. With {_LEVEL_META[level]['measurements']} measurements, the EIT inverse problem is still well-constrained."
+        base = (
+            f"{alg} performs excellently at Level {level}. With "
+            f"{_LEVEL_META[level]['measurements']} measurements, "
+            "the EIT inverse problem is still well-constrained."
+        )
     elif ssim >= 0.70:
-        base = f"{alg} maintains reasonable quality at Level {level}, though the reduced electrode count ({_LEVEL_META[level]['electrodes']}) is starting to limit spatial resolution."
+        base = (
+            f"{alg} maintains reasonable quality at Level {level}, though the reduced "
+            f"electrode count ({_LEVEL_META[level]['electrodes']}) is starting to limit "
+            "spatial resolution."
+        )
     elif ssim >= 0.55:
-        base = f"At Level {level}, {alg} shows visible degradation. Fewer measurement paths ({_LEVEL_META[level]['measurements']}) mean the inverse problem is becoming under-determined."
+        base = (
+            f"At Level {level}, {alg} shows visible degradation. Fewer measurement paths "
+            f"({_LEVEL_META[level]['measurements']}) mean the inverse problem is becoming "
+            "under-determined."
+        )
     elif ssim >= 0.40:
-        base = f"Level {level} is challenging for {alg}. Only {_LEVEL_META[level]['electrodes']} electrodes leaves large angular gaps, causing significant reconstruction artifacts."
+        base = (
+            f"Level {level} is challenging for {alg}. Only "
+            f"{_LEVEL_META[level]['electrodes']} electrodes leaves large angular gaps, "
+            "causing significant reconstruction artifacts."
+        )
     else:
-        base = f"At Level {level}, {alg} is operating near its limit. With only {_LEVEL_META[level]['measurements']} measurements ({_LEVEL_META[level]['measurements'] / _LEVEL_META[1]['measurements'] * 100:.0f}% of Level 1), reliable reconstruction is very difficult."
+        meas = _LEVEL_META[level]['measurements']
+        meas_pct = meas / _LEVEL_META[1]['measurements'] * 100
+        base = (
+            f"At Level {level}, {alg} is operating near its limit. With only "
+            f"{meas} measurements ({meas_pct:.0f}% of Level 1), "
+            "reliable reconstruction is very difficult."
+        )
 
     return base + cliff_str
 
 
 def register_callbacks(app) -> None:  # noqa: ANN001
-    """Register all M2 callbacks."""
+    # Register all M2 callbacks.
 
     @app.callback(
         Output("m2-interval", "disabled"),
@@ -829,7 +877,8 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         Input("sidebar-sample-radio", "value"),
         Input("sidebar-algorithm-dropdown", "value"),
     )
-    # redraws the ground truth, reconstruction, and error overlay whenever level, sample, or algorithm changes
+    # redraws the ground truth, reconstruction, and error overlay whenever
+    # level, sample, or algorithm changes
     def update_images(level, sample, algorithm):
         gt_fig = _gt_figure(level, sample)
         recon_fig, error_fig = _recon_and_error_figures(level, sample, algorithm)
@@ -913,7 +962,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             if runtime is not None and runtime >= _RUNTIME_REAL_THRESHOLD_S:
                 if runtime >= 60:
                     m_, s_ = divmod(int(runtime), 60)
-                    rt_label = f"{m_}m {s_:02d}s" if m_ < 60 else f"{m_//60}h {m_%60:02d}m"
+                    rt_label = f"{m_}m {s_:02d}s" if m_ < 60 else f"{m_ // 60}h {m_ % 60:02d}m"
                 else:
                     rt_label = f"{runtime:.1f} s"
                 chips.append(_chip("runtime", rt_label))
@@ -935,16 +984,29 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         meas_lost = l1["measurements"] - meta["measurements"]
 
         if level == 1:
-            description = "Full measurement protocol with maximum data. Best expected reconstruction quality."
+            description = (
+                "Full measurement protocol with maximum data. Best expected reconstruction quality."
+            )
             bar_color = SUCCESS
         elif level <= 3:
-            description = f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements than Level 1. Mild data reduction and most algorithms still perform well."
+            description = (
+                f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements than Level 1. "
+                "Mild data reduction and most algorithms still perform well."
+            )
             bar_color = "#4caf50"
         elif level <= 5:
-            description = f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements. Moderate data loss and the inverse problem starts becoming under-determined. Quality begins to drop."
+            description = (
+                f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements. "
+                "Moderate data loss and the inverse problem starts becoming under-determined. "
+                "Quality begins to drop."
+            )
             bar_color = WARN
         else:
-            description = f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements. Severe data loss with only {meas_pct:.0f}% of Level 1 data remaining. Most algorithms degrade significantly."
+            description = (
+                f"{elec_lost} electrodes removed, {meas_lost:,} fewer measurements. "
+                f"Severe data loss with only {meas_pct:.0f}% of Level 1 data remaining. "
+                "Most algorithms degrade significantly."
+            )
             bar_color = DANGER
 
         bar_width = meas_pct
@@ -953,9 +1015,14 @@ def register_callbacks(app) -> None:  # noqa: ANN001
             html.Div([
                 html.Span(f"Level {level} data availability: {meas_pct:.0f}% of Level 1",
                           style={"color": TEXT, "fontSize": "12px", "fontWeight": 600}),
-                html.Span(f"  {meta['electrodes']} electrodes, {meta['measurements']:,} measurements",
-                          style={"color": MUTED, "fontSize": "11px"}),
-            ], style={"marginBottom": "6px", "display": "flex", "alignItems": "baseline", "gap": "4px"}),
+                html.Span(
+                    f"  {meta['electrodes']} electrodes, {meta['measurements']:,} measurements",
+                    style={"color": MUTED, "fontSize": "11px"},
+                ),
+            ], style={
+                "marginBottom": "6px", "display": "flex",
+                "alignItems": "baseline", "gap": "4px",
+            }),
             # Progress bar
             html.Div([
                 html.Div(style={
