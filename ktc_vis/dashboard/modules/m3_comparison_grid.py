@@ -122,9 +122,7 @@ _PANEL_HDR = {
     "borderBottom": f"1px solid {BORDER}",
 }
 
-
 # Layout
-
 
 def layout() -> html.Div:
     """Build the full M3 page — three stacked sections from top to bottom."""
@@ -623,15 +621,14 @@ _MAX_INJ_SHOWN = 8   # max injections shown per channel group
 _MAX_CH_SHOWN = 32   # max channels on x-axis before range-slider kicks in
 
 # These colors are hand-picked for a dark background (#1a1a2e) and checked for
-# colorblind-friendliness. Don't swap them out for a continuous colorscale —
-# adjacent Plasma steps look nearly identical on dark surfaces.
+
 _INJECTION_COLORS = [
     "#3987e5",  # blue
     "#199e70",  # aqua
     "#c98500",  # yellow
     "#008300",  # green
     "#9085e9",  # violet
-    "#e66767",  # red
+    "#e4cccc",  # red
     "#d55181",  # magenta
     "#d95926",  # orange
 ]
@@ -1170,10 +1167,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
 
     # full-screen toggle for the voltage chart on double-click
-    # Plotly fires a relayout event with xaxis.autorange + yaxis.autorange = True
-    # whenever the user double-clicks anywhere on the chart. We treat that as a
-    # reliable toggle signal and flip the wrapper div between an inline box and a
-    # fixed full-viewport overlay, then nudge Plotly to resize its canvas.
+    
     app.clientside_callback(
         """
         function(relayoutData, isFull) {
