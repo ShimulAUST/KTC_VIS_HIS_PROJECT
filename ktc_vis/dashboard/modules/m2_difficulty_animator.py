@@ -1,4 +1,4 @@
-"""Module 2: Difficulty Animator. Owner: Asmita Bhuva."""
+# Module 2: Difficulty Animator.
 
 from pathlib import Path
 
@@ -50,7 +50,7 @@ _GT_COLORSCALE_3 = [
 # ── Layout ────────────────────────────────────────────────────────────────────
 
 def layout() -> html.Div:
-    """Level animator: ground truth images + degradation curves across levels 1–7."""
+    #Level animator: ground truth images + degradation curves across levels 1–7.
     return html.Div([
 
         # ── Module header ─────────────────────────────────────────────────────
@@ -298,7 +298,7 @@ def _curve_card(title: str, graph_id: str, description: str = "") -> html.Div:
 # ── Figure builders ───────────────────────────────────────────────────────────
 
 def _gt_figure(level: int, sample: str) -> go.Figure:
-    """Load ground truth .mat and return a Plotly heatmap figure."""
+    # Load ground truth .mat and return a Plotly heatmap figure.
     idx = SAMPLE_MAP.get(sample, 1)
     mat_path = RAW_DIR / "ground_truth" / f"true{idx}.mat"
 
@@ -371,7 +371,7 @@ _LOG_Y_RANGE: dict[str, tuple[float, float] | None] = {
 
 def _curve_figure(metric: str, algorithm: str, sample: str,
                   current_level: int = 1) -> go.Figure:
-    """Try to load metric values from HDF5 cache; show placeholder if unavailable."""
+    # Try to load metric values from HDF5 cache; show placeholder if unavailable.
     values = _try_load_from_cache(metric, algorithm, sample)
 
     if values is not None:
@@ -445,7 +445,7 @@ def _curve_figure(metric: str, algorithm: str, sample: str,
 
 
 def _dice_curve_figure(algorithm: str, sample: str, current_level: int = 1) -> go.Figure:
-    """Compute Dice from cached IoU (dice = 2·IoU / (1 + IoU)) and plot as a curve."""
+    # Compute Dice from cached IoU (dice = 2·IoU / (1 + IoU)) and plot as a curve.
     iou_vals = _try_load_from_cache("iou_mean", algorithm, sample)
     if iou_vals is not None:
         dice_vals = [2 * v / (1 + v) if (1 + v) != 0 else 0.0 for v in iou_vals]
@@ -458,7 +458,7 @@ def _curve_figure_from_values(
     values: list | None, algorithm: str, sample: str, current_level: int = 1,
     metric: str | None = None,
 ) -> go.Figure:
-    """Like _curve_figure but accepts pre-computed values instead of a metric name."""
+    # Like _curve_figure but accepts pre-computed values instead of a metric name.
     fig = go.Figure()
     annotation = []
     if values is not None:
@@ -502,7 +502,7 @@ def _curve_figure_from_values(
 def _recon_and_error_figures(
     level: int, sample: str, algorithm: str
 ) -> tuple[go.Figure, go.Figure]:
-    """Return reconstruction and error overlay figures from cache, or placeholders."""
+    # Return reconstruction and error overlay figures from cache, or placeholders.
     try:
         from ktc_vis.cache.hdf5_store import load_result
         _, recon = load_result(algorithm, level, sample, cache_path=_CACHE_PATH)
@@ -545,7 +545,7 @@ def _recon_and_error_figures(
 
 
 def _try_load_from_cache(metric: str, algorithm: str, sample: str):
-    """Return list of metric values for levels 1-7, or None if cache unavailable."""
+    # Return list of metric values for levels 1-7, or None if cache unavailable.
     try:
         import h5py
         if not _CACHE_PATH.exists():
@@ -802,7 +802,7 @@ def _summary_sentence(
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 
 def register_callbacks(app) -> None:  # noqa: ANN001
-    """Register all M2 callbacks."""
+    # Register all M2 callbacks.
 
     # ── Play / Pause toggle ───────────────────────────────────────────────────
     @app.callback(
