@@ -197,7 +197,7 @@ def _header() -> html.Div:
             html.P(
                 "Displays ABC1, CUQI8, and PNPE2E for the same (level, sample) "
                 "simultaneously. Pairwise difference images reveal where algorithms "
-                "disagree. The voltage heatmap shows the raw measurement data each "
+                "disagree. The voltage chart shows the raw measurement data each "
                 "algorithm received, and the scorecard compares quality metrics "
                 "from the benchmark cache.",
                 style={"color": MUTED, "margin": "8px 0 0", "fontSize": "13px",
