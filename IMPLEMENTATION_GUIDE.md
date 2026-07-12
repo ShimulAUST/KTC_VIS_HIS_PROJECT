@@ -67,7 +67,8 @@ KTC_VIS_HIS_PROJECT/
 │   │   ├── shape_matching.py           # Hausdorff, position error, resolution
 │   │   ├── class_metrics.py            # Per-class IoU/Dice, confusion matrix
 │   │   ├── measurement.py              # Voltage residual, resistance consistency, current sensitivity
-│   │   └── efficiency.py               # measure_runtime()
+│   │   ├── efficiency.py               # measure_runtime()
+│   │   └── _voltage_surrogate.py       # Surrogate forward model for measurement-domain metrics
 │   ├── cache/
 │   │   └── hdf5_store.py               # save_result / load_result / is_cached / CacheMiss
 │   ├── dashboard/
@@ -95,7 +96,7 @@ KTC_VIS_HIS_PROJECT/
 ├── tests/
 │   ├── conftest.py                      # Shared fixtures (currently empty — see §10)
 │   ├── test_loader.py, test_adapters.py, test_cache.py, test_metrics.py
-│   └── test_modules/test_m1.py … test_m6.py
+│   └── test_modules/test_m1.py … test_m6.py, test_glossary.py
 ├── docs/
 │   ├── adding_new_algorithm.md
 │   └── interpreting_dashboard.md
@@ -417,23 +418,28 @@ Typical bring-up order: `setup_third_party.sh` → `stage_dataset.py` → `valid
 - **`requirements.txt`** — pip-only equivalent for quick local dev without Conda.
 - **`Dockerfile`** — `continuumio/miniconda3` base + a static Docker CLI binary (so the app container can `docker run` the algorithm images via the mounted host socket), builds the `ktc-vis` conda env, installs the package with `pip install -e . --no-deps`, exposes 8050 with a healthcheck against `/`.
 - **`docker-compose.yml`** — mounts `./data` (shared cache), `/var/run/docker.sock` (so adapters can launch sibling containers), and hot-reloads `ktc_vis/`, `app.py`, `configs/` for development.
-- **`.github/workflows/ci.yml`** — `conda-incubator/setup-miniconda` + mamba, `flake8 ktc_vis/ --max-line-length=100 --ignore=E501,W503`, `pytest tests/ --cov=ktc_vis` (excludes `test_adapters.py`, which needs the real dataset/Docker and is meant to run locally), uploads coverage via `codecov-action`.
+- **`.github/workflows/ci.yml`** — `conda-incubator/setup-miniconda` + mamba, `flake8 ktc_vis/ --max-line-length=100` (no ignores — all violations are fixed in source), `pytest tests/ --cov=ktc_vis` (excludes `test_adapters.py`, which needs the real dataset/Docker and is meant to run locally), uploads coverage via `codecov-action`.
 
 ---
 
 ## 10. Testing — Current State
 
-`tests/conftest.py` and every `tests/test_*.py` / `tests/test_modules/test_m*.py` file are currently **placeholder stubs** (`def test_placeholder(): assert True`). `pyproject.toml` already wires up `pytest` + `pytest-cov` (source=`ktc_vis`, excluding `dashboard/modules/*`) and a `requires_data` marker for tests needing the real KTC2023 dataset — the scaffolding is ready, the actual assertions are not written yet. Before relying on CI green as a correctness signal, treat this as the highest-priority gap:
+`pyproject.toml` wires up `pytest` + `pytest-cov` (source=`ktc_vis`, excluding `dashboard/modules/*`) and a `requires_data` marker for tests needing the real KTC2023 dataset.
 
-- `test_loader.py` / `test_cache.py` / `test_metrics.py` — should assert against known-good values (e.g. SSIM within the paper's tolerance) once fixtures load real or synthetic `.mat` data.
+**Implemented:** `tests/test_modules/test_glossary.py` has full real assertions covering glossary term coverage, case-insensitive lookup, `with_tooltip`, `info_pill`, and `glossary_term` helpers.
+
+**Still stubs** (`def test_placeholder(): assert True`):
+- `test_loader.py` / `test_cache.py` / `test_metrics.py` — should assert against known-good values once fixtures load real or synthetic `.mat` data.
 - `test_adapters.py` — needs Docker + the staged dataset; correctly excluded from the default CI job.
-- `test_modules/test_m*.py` — should assert that each module's callbacks return valid `Figure` objects for edge-case inputs (level 1, level 7, all three algorithms, missing cache).
+- `test_modules/test_m1.py` … `test_m6.py` — should assert that each module's callbacks return valid `Figure` objects for edge-case inputs (level 1, level 7, all three algorithms, missing cache).
+
+Before relying on CI green as a correctness signal, completing the stub test files remains the highest-priority gap.
 
 ---
 
 ## 11. Coding Standards
 
-- **Python 3.10**, PEP 8, max line length 100 (flake8 config in `pyproject.toml` ignores `E501`/`W503` — line length is soft-enforced by convention, not the linter).
+- **Python 3.10**, PEP 8, max line length 100 — enforced by flake8 with no ignore exceptions; all long lines are fixed at source, not suppressed.
 - Type hints on public functions/methods; module docstrings note an "Owner" in most files (historical — reflects original team assignment, not a hard ownership boundary).
 - No magic numbers for domain constants — level/electrode tables live in `subsampler.py` / `loader.py` / `configs/experiment.yaml`.
 - **Dash/Plotly:** every component ID is unique and module-prefixed (`m{N}-...`); callbacks declare explicit `Output`/`Input`/`State`; figures set `uirevision` to preserve zoom/pan across data updates.
