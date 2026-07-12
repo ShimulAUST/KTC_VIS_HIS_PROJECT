@@ -21,7 +21,9 @@ from ktc_vis.metrics.measurement import (
     compute_resistance_consistency,
     compute_voltage_residual,
 )
-from ktc_vis.metrics.shape_matching import compute_hausdorff, compute_position_error, compute_resolution
+from ktc_vis.metrics.shape_matching import (
+    compute_hausdorff, compute_position_error, compute_resolution,
+)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"

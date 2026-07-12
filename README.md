@@ -9,6 +9,16 @@ KTC-Vis integrates three open-source EIT reconstruction algorithms from KTC2023 
 
 ---
 
+## What is KTC-Vis?
+
+**Electrical Impedance Tomography (EIT)** is a non-invasive imaging technique that reconstructs the internal conductivity distribution of an object by injecting small currents through surface electrodes and measuring the resulting voltages.
+
+**KTC2023** (Kuopio Tomography Challenge 2023) is an international EIT benchmark competition that released a standardised dataset of phantom tank measurements across 7 difficulty levels — from 32 electrodes (full data) down to 20 (sparse data) — and attracted open-source algorithm submissions from research groups worldwide.
+
+**KTC-Vis** is an interactive benchmarking dashboard built for the Project HIS course at Frankfurt University of Applied Sciences. It loads three top-performing KTC2023 algorithms (ABC1, CUQI8, PNPE2E), runs them on the same phantom data, and lets researchers and students explore reconstructions, metrics, and raw measurements side-by-side — without writing any code. It is aimed at EIT researchers comparing algorithm performance, students learning the reconstruction pipeline, and anyone who wants to understand *why* a particular algorithm succeeds or fails at a given difficulty level.
+
+---
+
 ## Team Members
 
 | Name | Student ID | Role | Modules |
@@ -29,6 +39,27 @@ There is no open tool that loads all KTC2023 algorithms, runs them on the same d
 3. **Multi-dimensional evaluation** — 14 metrics per (algorithm × level × sample) covering image quality, shape matching, class-specific accuracy, measurement fit, and data efficiency.
 4. **Visual explainability** — Every metric is linked to a visual (e.g., low SSIM → spatial quality map; high voltage residual → measurement error plot).
 5. **Measurement-domain visibility** — Raw current sequences, voltage responses, and resistance estimates are all explorable.
+
+---
+
+## Gaps Filled
+
+No existing open-source tool covers the full offline, multi-algorithm, multi-level EIT benchmarking workflow that KTC-Vis provides.
+
+| Tool | What it does | What it lacks |
+|------|-------------|---------------|
+| **pyEIT** | Classical EIT workflows (back-projection, Gauss-Newton, FEM mesh tooling) | No benchmark comparison mode, no KTC2023 support, single-algorithm only |
+| **OpenEIT** | Real-time EIT imaging from live hardware streams | Offline benchmark mode; no saved dataset support; no multi-algorithm comparison |
+| **KTC2023 original repos** | Each algorithm's standalone reconstruction code | Per-algorithm silos — no unified comparison, no shared metrics, no side-by-side visualisation |
+| **KTC-Vis** | Unified dashboard: all three algorithms, all 7 levels, 18 metrics, raw measurement explorer | — |
+
+Concretely, KTC-Vis is the first tool that:
+
+1. **Runs all three KTC2023 algorithms on identical data** and displays their outputs side-by-side in the same coordinate space.
+2. **Links the measurement domain to the image domain** — you can inspect the raw current/voltage/resistance signal an algorithm received and immediately compare it with the reconstruction it produced.
+3. **Quantifies failure modes** — the Failure Autopsy module automatically classifies bad reconstructions (ghost inclusion, missing inclusion, class flip, boundary erosion, mask suppression) instead of just flagging that the SSIM is low.
+4. **Animates difficulty degradation** — the Difficulty Animator makes the quality collapse across levels 1–7 directly observable rather than inferred from a table.
+5. **Caches results reproducibly** — all metrics are stored in an HDF5 cache keyed by `(algorithm, level, sample)`, so every chart in the dashboard is exactly repeatable from the same cache file.
 
 ---
 
