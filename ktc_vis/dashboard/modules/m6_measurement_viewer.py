@@ -576,7 +576,7 @@ def electrode_impedance_figure(measurement: KTCMeasurement, level: int) -> go.Fi
 
 def level_coverage_figure(current_level: int, sample: str) -> go.Figure:
     # Electrode count and measurement-pair count at each difficulty level 1–7.
-    levels      = list(range(1, 8))
+    levels = list(range(1, 8))
     n_electrodes = [len(subsample_electrodes(lv)) for lv in levels]
     n_pairs: list[int | None] = []
     for lv in levels:
