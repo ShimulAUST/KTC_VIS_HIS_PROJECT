@@ -44,7 +44,7 @@ _EXPECTED = {
     "pnpe2e": "Strong for current sensitivity and voltage residual.",
 }
 
-# Nine radar axes in clockwise order
+# The nine axes, in the order they're plotted going clockwise around the radar
 _AXES = [
     "Total SSIM",
     "Easy SSIM",
@@ -67,18 +67,16 @@ _AXIS_HINT = [
     "Inverted voltage residual · lower = better (measurement)",
     "Equal use of all injection patterns (measurement)",
 ]
-# Axes inverted before display (lower raw = better)
+# These axes get flipped before we plot them, since a lower raw number is actually the better result
 _INVERT = {"Speed", "Robustness", "Voltage Residual"}
 
-# Component IDs
 _RADAR_ID = "m4-radar"
 _STATS_ID = "m4-stats"
 _PROFILES_ID = "m4-profiles"
 _INFO_ID = "m4-info"
 
 
-# ── Public API ────────────────────────────────────────────────────────────────
-
+# Public API 
 def layout() -> html.Div:
     """M4 layout: header → algorithm profile cards → radar + legend → heatmap."""
     return html.Div(
@@ -155,8 +153,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         return fig, stats, profiles, html.Div()
 
 
-# ── Data helpers ──────────────────────────────────────────────────────────────
-
+# Data helpers 
 def _load_cache_data(
     cache_path: Path = _CACHE_PATH,
 ) -> dict[str, dict[tuple[int, str], dict]]:
@@ -200,7 +197,6 @@ def _compute_axes(
 
         point = data.get((level, sample), {})
 
-        # Robustness: std of SSIM across all samples at the selected level
         ssim_across_samples = [
             data[(level, s)]["ssim"]
             for s in _SAMPLES
@@ -224,7 +220,7 @@ def _compute_axes(
             "Curr. Sensitivity": point.get("current_sensitivity", float("nan")),
         }
 
-    # Min-max normalise per axis; apply inversion for "lower=better" axes
+    # Scale each axis to 0-1 across the three algorithms, then flip the ones where a lower raw number actually means a better result
     normalised: dict[str, dict[str, float]] = {alg: {} for alg in _ALGORITHMS}
     for axis in _AXES:
         vals = {alg: raw[alg][axis] for alg in _ALGORITHMS}
@@ -255,8 +251,7 @@ def _mean(values: list[float]) -> float:
     return float(np.mean(values)) if values else float("nan")
 
 
-# ── Radar figure ──────────────────────────────────────────────────────────────
-
+# Radar figure
 def _build_radar(
     normalised: dict[str, dict[str, float]],
     highlighted: str | None,
@@ -290,8 +285,6 @@ def _build_radar(
             )
         )
 
-    # Axis domain divider: draw a faint arc over the measurement-domain axes
-    # (axes 7–8, indices 7 and 8 = "Voltage Residual", "Curr. Sensitivity")
     fig.update_layout(
         polar=dict(
             bgcolor="#14142a",
@@ -357,8 +350,7 @@ def _empty_radar(message: str) -> go.Figure:
     return fig
 
 
-# ── Algorithm profile cards ───────────────────────────────────────────────────
-
+# Algorithm profile cards
 def _profile_card(
     alg: str,
     scores: dict[str, float],
@@ -375,7 +367,7 @@ def _profile_card(
 
     return html.Div(
         [
-            # Coloured top accent bar
+            # Just a thin strip of colour along the top of the card, purely decorative
             html.Div(style={"height": "4px", "backgroundColor": color,
                             "borderRadius": "12px 12px 0 0"}),
             html.Div(
@@ -464,15 +456,13 @@ def _mini_bar(label: str, score: float, color: str) -> html.Div:
     )
 
 
-# ── Heatmap stats table ───────────────────────────────────────────────────────
-
+# Heatmap stats table 
 def _build_heatmap(
     normalised: dict[str, dict[str, float]],
     raw_axis: dict[str, dict[str, float]],
 ) -> html.Div:
     col_tmpl = "180px " + " ".join(["1fr"] * len(_ALGORITHMS))
 
-    # Column header
     header_cells = [
         html.Div("Axis", style={
             "color": MUTED, "fontSize": "10px", "letterSpacing": "0.8px",
@@ -502,7 +492,7 @@ def _build_heatmap(
 
     rows = []
     for i, axis in enumerate(_AXES):
-        # Domain section label before the measurement axes
+        # Right before the measurement-domain axes start, drop in a label so the table visually splits into the two groups
         if i == 7:
             rows.append(html.Div(
                 "Measurement Domain",
@@ -543,9 +533,7 @@ def _build_heatmap(
             raw_v = raw_axis[alg].get(axis, float("nan"))
             is_best = abs(score - best) < 1e-6 and best > 0
 
-            # Cell background tinted by algorithm color at score opacity
-            # (score still drives the bar/tint so relative standing stays
-            # visible — only the raw value is printed, never the 0-1 score)
+            # We only ever print the raw value, never the 0-1 score, but the score still controls how strongly the cell is tinted so you can see at a glance how each algorithm stacks up
             cell_bg = _hex_rgba(_COLOR[alg], score * 0.18)
             value_color = _score_color(score)
 
@@ -613,8 +601,7 @@ def _build_heatmap(
     return html.Div([title, header, *rows], style={**CARD_STYLE, "overflow": "hidden"})
 
 
-# ── Layout helpers ────────────────────────────────────────────────────────────
-
+# Layout helpers
 def _header() -> html.Div:
     return html.Div(
         [
@@ -635,7 +622,7 @@ def _header() -> html.Div:
                 "Nine-axis radar comparing each algorithm's performance polygon. "
                 "SSIM axes aggregate across all levels for the selected sample; "
                 "IoU and Speed respond to the selected level. "
-                "Higher is always better — Speed, Robustness, and Voltage Residual "
+                "Higher is always better - Speed, Robustness, and Voltage Residual "
                 "are inverted.",
                 style={"color": MUTED, "margin": "8px 0 0",
                        "fontSize": "13px", "lineHeight": "1.5"},
