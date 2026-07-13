@@ -75,7 +75,8 @@ def _write_training_data(training_dir: Path, level: int, samples: list[str]) -> 
             m = subsample_measurement(m, level)
         scipy.io.savemat(
             str(training_dir / f"data{idx}.mat"),
-            {"Inj": m.current_matrix.T, "Mpat": m.__dict__.get("mpat", np.zeros((32, 31))), "Uel": m.voltage_matrix.flatten()},
+            {"Inj": m.current_matrix.T, "Mpat": m.__dict__.get(
+                "mpat", np.zeros((32, 31))), "Uel": m.voltage_matrix.flatten()},
         )
 
 

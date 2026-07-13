@@ -936,8 +936,8 @@ def _confusion_interpretation(cm: np.ndarray) -> html.Div:
         return _interpretation_block(
             "Reading",
             "Diagonal-only — every pixel is in the correct class. "
-            f"Per-class accuracy: water {diag[0]*100:.0f}%, "
-            f"resistive {diag[1]*100:.0f}%, conductive {diag[2]*100:.0f}%.",
+            f"Per-class accuracy: water {diag[0] * 100:.0f}%, "
+            f"resistive {diag[1] * 100:.0f}%, conductive {diag[2] * 100:.0f}%.",
             accent=SUCCESS,
         )
 
@@ -955,7 +955,7 @@ def _confusion_interpretation(cm: np.ndarray) -> html.Div:
         family = "class flip — resistive vs conductive swapped"
         accent = "#a07bff"
 
-    body = (f"Biggest single error: {cell*100:.1f}% of {labels[i]} pixels were "
+    body = (f"Biggest single error: {cell * 100:.1f}% of {labels[i]} pixels were "
             f"predicted as {labels[j]} → {family}.")
     if cell >= 0.20:
         body += "  This is a dominant failure mode for this case."
@@ -1052,7 +1052,7 @@ def _measurement_interpretation(per_inj: np.ndarray | None) -> html.Div:
         location = "n/a"
 
     if contrast < 0.15:
-        body = (f"Signal is nearly flat ({contrast*100:.0f}% peak-to-median "
+        body = (f"Signal is nearly flat ({contrast * 100:.0f}% peak-to-median "
                 f"contrast). Most injections carry little inclusion info; "
                 f"algorithms have very thin data to work with.")
         accent = DANGER
@@ -1632,8 +1632,8 @@ def _classify_failure(
         "B": fn,
         "C": swap,
         "D": erosion,
-        "E": fn * (1.5 if algorithm == "pnpe2e" else 0.0)
-        + inclusion_balance * (0.5 if algorithm == "pnpe2e" else 0.0),
+        "E": fn * (1.5 if algorithm == "pnpe2e" else 0.0) +
+        inclusion_balance * (0.5 if algorithm == "pnpe2e" else 0.0),
     }
 
     # Strong unique signal → respect it
@@ -1762,7 +1762,7 @@ def _boundary_radial_figure(
     # (drawn dim gray ).
     active = set(subsample_electrodes(level))
     all_angles = [(360.0 * idx / 32.0) % 360 for idx in range(32)]
-    active_angles  = [a for i, a in enumerate(all_angles) if i in active]
+    active_angles = [a for i, a in enumerate(all_angles) if i in active]
     removed_angles = [a for i, a in enumerate(all_angles) if i not in active]
 
     rmax = float(counts.max()) if counts.max() > 0 else 1.0

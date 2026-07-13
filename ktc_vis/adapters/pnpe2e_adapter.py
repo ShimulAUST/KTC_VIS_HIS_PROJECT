@@ -49,8 +49,8 @@ class PNPE2EAdapter(AlgorithmAdapter):
             _write_training_data(training_dir, level, list(_SAMPLE_INDEX.keys()))
 
             python_call = (
-                _CPU_PATCH
-                + f"from main import main; main('TrainingData', 'Output', {level})"
+                _CPU_PATCH +
+                f"from main import main; main('TrainingData', 'Output', {level})"
             )
             cmd = [
                 "docker", "run", "--rm",
@@ -84,7 +84,8 @@ def _write_training_data(training_dir: Path, level: int, samples: list[str]) -> 
             m = subsample_measurement(m, level)
         scipy.io.savemat(
             str(training_dir / f"data{idx}.mat"),
-            {"Inj": m.current_matrix.T, "Mpat": m.__dict__.get("mpat", np.zeros((32, 31))), "Uel": m.voltage_matrix.flatten()},
+            {"Inj": m.current_matrix.T, "Mpat": m.__dict__.get(
+                "mpat", np.zeros((32, 31))), "Uel": m.voltage_matrix.flatten()},
         )
 
 

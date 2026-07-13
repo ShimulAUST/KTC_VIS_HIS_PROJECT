@@ -29,7 +29,8 @@ class AlgorithmAdapter(ABC):
     """
 
     name: str  # Short identifier used in HDF5 cache keys and UI labels
-    supports_level_batching: bool = False  # Override in adapters that can process a whole level at once
+    # Override in adapters that can process a whole level at once
+    supports_level_batching: bool = False
 
     def __init__(self, timeout: int = 600, stream: bool = False) -> None:
         self.timeout = timeout
@@ -38,7 +39,8 @@ class AlgorithmAdapter(ABC):
     @abstractmethod
     def reconstruct(self, measurement: KTCMeasurement) -> np.ndarray:
         """ Run reconstruction for a single measurement.
-            Returns: 256×256 uint8 ndarray with pixel values in {0=water, 1=resistive, 2=conductive}.
+            Returns: 256×256 uint8 ndarray with pixel values in
+            {0=water, 1=resistive, 2=conductive}.
         """
 
     def reconstruct_level(

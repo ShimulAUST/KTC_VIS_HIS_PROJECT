@@ -46,7 +46,7 @@ class KTCDataLoader:
             level: Difficulty level, 1–7.
             sample: Sample identifier, one of ``"a"``, ``"b"``, ``"c"``, ``"d"``.
 
-        Returns: 
+        Returns:
             class:`KTCMeasurement` with all matrices populated.
 
         Raises:
