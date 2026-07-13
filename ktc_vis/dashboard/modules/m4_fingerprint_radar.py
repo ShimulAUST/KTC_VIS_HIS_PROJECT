@@ -76,7 +76,7 @@ _PROFILES_ID = "m4-profiles"
 _INFO_ID = "m4-info"
 
 
-# Public API 
+# Public API
 def layout() -> html.Div:
     """M4 layout: header → algorithm profile cards → radar + legend → heatmap."""
     return html.Div(
@@ -153,7 +153,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         return fig, stats, profiles, html.Div()
 
 
-# Data helpers 
+# Data helpers
 def _load_cache_data(
     cache_path: Path = _CACHE_PATH,
 ) -> dict[str, dict[tuple[int, str], dict]]:
@@ -220,7 +220,8 @@ def _compute_axes(
             "Curr. Sensitivity": point.get("current_sensitivity", float("nan")),
         }
 
-    # Scale each axis to 0-1 across the three algorithms, then flip the ones where a lower raw number actually means a better result
+    # Scale each axis to 0-1 across the three algorithms, then flip the ones
+    # where a lower raw number actually means a better result
     normalised: dict[str, dict[str, float]] = {alg: {} for alg in _ALGORITHMS}
     for axis in _AXES:
         vals = {alg: raw[alg][axis] for alg in _ALGORITHMS}
@@ -456,7 +457,7 @@ def _mini_bar(label: str, score: float, color: str) -> html.Div:
     )
 
 
-# Heatmap stats table 
+# Heatmap stats table
 def _build_heatmap(
     normalised: dict[str, dict[str, float]],
     raw_axis: dict[str, dict[str, float]],
@@ -492,7 +493,8 @@ def _build_heatmap(
 
     rows = []
     for i, axis in enumerate(_AXES):
-        # Right before the measurement-domain axes start, drop in a label so the table visually splits into the two groups
+        # Right before the measurement-domain axes start, drop in a label so
+        # the table visually splits into the two groups
         if i == 7:
             rows.append(html.Div(
                 "Measurement Domain",
@@ -533,7 +535,9 @@ def _build_heatmap(
             raw_v = raw_axis[alg].get(axis, float("nan"))
             is_best = abs(score - best) < 1e-6 and best > 0
 
-            # We only ever print the raw value, never the 0-1 score, but the score still controls how strongly the cell is tinted so you can see at a glance how each algorithm stacks up
+            # We only ever print the raw value, never the 0-1 score, but the
+            # score still controls how strongly the cell is tinted so you can
+            # see at a glance how each algorithm stacks up
             cell_bg = _hex_rgba(_COLOR[alg], score * 0.18)
             value_color = _score_color(score)
 
