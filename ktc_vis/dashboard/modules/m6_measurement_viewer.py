@@ -1,4 +1,4 @@
-"""Module 6: Measurement Domain Viewer. Owner: Asmita Bhuva.
+"""Module 6: Measurement Domain Viewer.
 
 Explores the raw electrical measurements independently of any
 reconstruction, for the selected ``(level, sample)``:
@@ -403,8 +403,11 @@ def snr_per_pair_figure(
 
 
 def resistance_overlay_figure(measurement: KTCMeasurement, inj_idx: int) -> go.Figure:
-    """All injections plotted as faint lines with the selected one highlighted in yellow.
-    Uses a single None-separated trace to avoid Plotly overhead during animation."""
+    # All injections as faint lines, selected one highlighted.
+    #
+    # All background traces are merged into one None-separated Scatter so
+    # Plotly handles a single object instead of up to 76 individual traces —
+    # keeps the play animation smooth.
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _ = _sanitize(measurement.resistance_matrix)
@@ -443,8 +446,7 @@ def resistance_overlay_figure(measurement: KTCMeasurement, inj_idx: int) -> go.F
 
 
 def resistance_summary_figure(measurement: KTCMeasurement) -> go.Figure:
-    """Mean resistance per pair ±1 std over all injections. Marker colour encodes how much
-    the pair varies across injection directions."""
+    # Mean R per pair ±1 std — bright marker = high variability across injections.
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _ = _sanitize(measurement.resistance_matrix)
@@ -480,8 +482,7 @@ def anomaly_score_figure(
     reference: KTCMeasurement | None,
     inj_idx: int,
 ) -> go.Figure:
-    """Per-injection anomaly score (sum of |ΔR| over all pairs). Taller bar means that
-    injection angle is more sensitive to the inclusion."""
+    # Per-injection anomaly score Σ|ΔR| — taller bar = more inclusion influence.
     if reference is None or \
             reference.resistance_matrix.shape != measurement.resistance_matrix.shape:
         return empty_figure("Reference (ref.mat) unavailable")
@@ -503,8 +504,7 @@ def anomaly_score_figure(
 
 
 def measurement_stability_figure(measurement: KTCMeasurement) -> go.Figure:
-    """Coefficient of variation per pair, flagging unstable measurements in red
-    at anything above twice the median."""
+    # Coefficient of variation per pair — red bars signal unstable measurements.
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _ = _sanitize(measurement.resistance_matrix)
@@ -532,8 +532,10 @@ def measurement_stability_figure(measurement: KTCMeasurement) -> go.Figure:
 
 
 def electrode_impedance_figure(measurement: KTCMeasurement, level: int) -> go.Figure:
-    """Mean |R| per electrode across every pair it participates in. Red bars above the
-    2x median threshold suggest poor contact or high impedance."""
+    # Mean |R| per electrode across all pairs it participates in.
+    #
+    # Electrodes with unusually high mean |R| may have poor contact or high
+    # contact impedance — they appear as red bars above the 2× median line.
     if measurement.resistance_matrix.size == 0:
         return empty_figure("No resistance data at this level")
     z, _ = _sanitize(measurement.resistance_matrix)
@@ -573,9 +575,8 @@ def electrode_impedance_figure(measurement: KTCMeasurement, level: int) -> go.Fi
 
 
 def level_coverage_figure(current_level: int, sample: str) -> go.Figure:
-    """Bar chart of active electrode counts across levels 1-7, with a secondary line
-    for measurement pair counts."""
-    levels = list(range(1, 8))
+    # Electrode count and measurement-pair count at each difficulty level 1–7.
+    levels      = list(range(1, 8))
     n_electrodes = [len(subsample_electrodes(lv)) for lv in levels]
     n_pairs: list[int | None] = []
     for lv in levels:
@@ -1227,9 +1228,7 @@ def _banner(message: str, kind: str = "info") -> html.Div:
 
 
 def register_callbacks(app) -> None:  # noqa: ANN001
-    # split into two callbacks to keep play animation smooth:
-    # update_panels_fast fires on every injection slider tick,
-    # update_panels_slow only fires when level or sample changes.
+    # Wire sidebar selectors + injection stepper to all M6 panels.
 
     # toggles between play and pause, enabling or disabling the interval timer
     @app.callback(

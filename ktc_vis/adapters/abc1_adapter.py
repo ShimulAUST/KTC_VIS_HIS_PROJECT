@@ -1,17 +1,4 @@
-"""ABC1 algorithm adapter. Owner: Muzammal.
-
-Wraps Docker image: muzammal5566/ktc2023-abc-python:latest
-
-Container run command:
-    docker run --rm --platform linux/amd64 \
-      -v "<training_dir>:/app/TrainingData" \
-      -v "<output_dir>:/app/Outputs" \
-      muzammal5566/ktc2023-abc-python:latest \
-      python main_python.py TrainingData Outputs <level>
-
-training_dir must contain ONLY data*.mat and ref.mat — no ground truth files,
-as main_python.py globs all .mat files and passes each through the solver.
-"""
+# ABC1 algorithm adapter. Wraps Docker image: muzammal5566/ktc2023-abc-python:latest
 
 import shutil
 import subprocess
@@ -31,7 +18,7 @@ _SAMPLE_INDEX = {"a": 1, "b": 2, "c": 3}
 
 
 class ABC1Adapter(AlgorithmAdapter):
-    """Adapter for the ABC1 (CNN-based) reconstruction algorithm."""
+    # Adapter for the ABC1 (CNN-based) reconstruction algorithm.
 
     name = "abc1"
 
@@ -42,7 +29,7 @@ class ABC1Adapter(AlgorithmAdapter):
     def reconstruct_level(
         self, level: int, samples: list[str]
     ) -> dict[str, np.ndarray]:
-        """Run ABC1 once for the whole level and return results for all samples."""
+        # Run ABC1 once for the whole level and return results for all samples.
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             training_dir = tmp_path / "TrainingData"
@@ -70,7 +57,7 @@ class ABC1Adapter(AlgorithmAdapter):
 
 
 def _write_training_data(training_dir: Path, level: int, samples: list[str]) -> None:
-    """Write subsampled measurement .mat files into training_dir for Docker."""
+    # Write subsampled measurement .mat files into training_dir for Docker.
     from ktc_vis.data.loader import KTCDataLoader
     from ktc_vis.data.subsampler import subsample_measurement
     loader = KTCDataLoader()
