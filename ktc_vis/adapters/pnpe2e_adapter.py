@@ -1,14 +1,5 @@
-"""PNPE2E algorithm adapter. Owner: Smit Savani.
+# PNPE2E algorithm adapter. Wraps Docker image: muzammal5566/ktc2023-pnpe2e:latest
 
-Wraps Docker image: muzammal5566/ktc2023-pnpe2e:latest
-
-Container run command:
-    docker run --rm --platform linux/amd64 \
-      -v "<level_dir>:/app/TrainingData" \
-      -v "<output_dir>:/app/Output" \
-      muzammal5566/ktc2023-pnpe2e:latest \
-      python -c "from main import main; main('TrainingData', 'Output', <level>)"
-"""
 
 import shutil
 import subprocess
@@ -35,7 +26,7 @@ _CPU_PATCH = (
 
 
 class PNPE2EAdapter(AlgorithmAdapter):
-    """Adapter for the PNPE2E (physics-informed end-to-end) reconstruction algorithm."""
+    # Adapter for the PNPE2E (physics-informed end-to-end) reconstruction algorithm.
 
     name = "pnpe2e"
     supports_level_batching = True
@@ -78,7 +69,7 @@ class PNPE2EAdapter(AlgorithmAdapter):
 
 
 def _write_training_data(training_dir: Path, level: int, samples: list[str]) -> None:
-    """Write subsampled measurement .mat files into training_dir for Docker."""
+    # Write subsampled measurement .mat files into training_dir for Docker.
     from ktc_vis.data.loader import KTCDataLoader
     from ktc_vis.data.subsampler import subsample_measurement
     loader = KTCDataLoader()

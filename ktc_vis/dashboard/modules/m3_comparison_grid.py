@@ -1,8 +1,4 @@
 """Module 3: Side-by-Side Comparison Grid.
-
-Shows all three algorithms (ABC1, CUQI8, PNPE2E) for the current level and sample
-at the same time, so you can compare outputs without switching tabs.
-
 Layout:
     Row 1  ── Algorithm reconstructions (one panel per algorithm, 3-column grid)
     Row 2  ── Pairwise pixel-difference images (3 pairs, diverging color scale)
@@ -125,7 +121,7 @@ _PANEL_HDR = {
 
 
 def layout() -> html.Div:
-    """Build the full M3 page — three stacked sections from top to bottom."""
+    # Build the full M3 page — three stacked sections from top to bottom.
     return html.Div(
         [
             _header(),
@@ -449,7 +445,7 @@ def _image_panel(
     badge_color: str = ACCENT,
     height: int = 340,
 ) -> html.Div:
-    """Build a titled card that wraps a single dcc.Graph — reused for every image panel."""
+    # Build a titled card that wraps a single dcc.Graph — reused for every image panel.
     badge_text = badge if badge else title[:4]
     return html.Div(
         [
@@ -567,7 +563,7 @@ def _base_layout(title: str) -> dict:
 
 
 def _recon_figure(recon: np.ndarray, alg: str, level: int, sample: str) -> go.Figure:
-    """Turn a segmentation array into a 3-class heatmap for one algorithm."""
+    # 3-class segmentation heatmap for one algorithm.
     fig = go.Figure(
         go.Heatmap(
             z=recon.astype(float),
@@ -585,7 +581,7 @@ def _diff_figure(
     recon_a: np.ndarray, recon_b: np.ndarray,
     alg_a: str, alg_b: str, level: int, sample: str,
 ) -> go.Figure:
-    """Show where two algorithms disagree — purple where A is higher, gold where B is higher."""
+    # Diverging pixel-class difference: A − B, range −2…+2.
     diff = recon_a.astype(np.int16) - recon_b.astype(np.int16)
     n_disagree = int(np.count_nonzero(diff))
     pct = n_disagree / diff.size * 100
@@ -635,12 +631,12 @@ _INJECTION_COLORS = [
 
 
 def _voltage_figure(measurement) -> go.Figure:
-    """Draw a grouped bar chart of voltage readings — one cluster per electrode channel.
-
-    Each bar color is one current injection. When there are more injections or channels
-    than the chart can comfortably show, we sample evenly across the full set so the
-    chart stays readable without forcing a range-slider on small datasets.
-    """
+    # Grouped bar chart — x = channel, bars per channel = one per injection.
+    #
+    # Each channel gets a cluster of bars, one bar per (sampled) injection.
+    # Injections are colour-coded blue→red via the Plasma palette so you can
+    # immediately see how the voltage pattern shifts with the injection index.
+    # A range-slider appears when there are more than _MAX_CH_SHOWN channels.
     V = measurement.voltage_matrix  # (n_inj, n_ch)
     n_inj, n_ch = V.shape
 
@@ -819,13 +815,7 @@ def _measurement_domain_is_stale(metrics: dict) -> bool:
 
 
 def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
-    """Pull metrics from cache, filling in anything that's missing or stale.
-
-    If the cache has a result, we check whether it predates newer metrics (Dice,
-    updated measurement-domain formulas, etc.) and recompute just the missing or
-    stale keys without re-running the full adapter. If there's no cached result
-    at all, we run the full pipeline from scratch.
-    """
+    # Pull metrics from cache, filling in anything that's missing or stale.
     metrics: dict | None = None
     reconstruction = None
 
@@ -893,7 +883,7 @@ def _try_load_metrics(algorithm: str, level: int, sample: str) -> dict | None:
 def _scorecard_children(
     level: int, sample: str, selected_alg: str
 ) -> list:
-    """Build the scorecard table that compares all three algorithms side by side."""
+    # Build the metrics scorecard table rows.
     all_metrics: dict[str, dict | None] = {
         alg: _try_load_metrics(alg, level, sample) for alg in _ALGORITHMS
     }
@@ -1030,7 +1020,7 @@ def _td_style(is_best: bool, is_selected: bool) -> dict:
 # ── Data loading helpers
 
 def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None:
-    """Grab a reconstruction array — check the cache first, run the adapter if it's not there."""
+    # Grab a reconstruction array check the cache first, run the adapter if it's not there.
     # ── 1. try the cache
     try:
         from ktc_vis.cache.hdf5_store import load_result
@@ -1053,7 +1043,7 @@ def _load_reconstruction(alg: str, level: int, sample: str) -> np.ndarray | None
 
 
 def register_callbacks(app) -> None:  # noqa: ANN001
-    """Hook up all the Dash callbacks that keep M3 panels in sync with the sidebar."""
+    # Wire sidebar selectors to all M3 panels.
 
     # ── collect every output in one flat list so the callback signature stays clean
     recon_outputs = [Output(_RECON_IDS[alg], "figure") for alg in _ALGORITHMS]

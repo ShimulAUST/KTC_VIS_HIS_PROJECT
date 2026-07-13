@@ -3,10 +3,6 @@
 This adapter does **not** run any reconstruction algorithm — it simply loads
 the published reconstruction ``.mat`` files staged under
 ``data/raw/ktc2023/reference_outputs/<algo>/``.
-
-It exists so that Module 1 (Reconstruction Explorer) can render results
-immediately without first wiring up the Docker-based live adapters.
-Replace with the real algorithm adapters in a later sprint.
 """
 
 from __future__ import annotations
@@ -32,7 +28,7 @@ _DEFAULT_OUTPUTS_ROOT = _PROJECT_ROOT / "data" / "raw" / "ktc2023" / "reference_
 
 
 class ReferenceOutputAdapter(AlgorithmAdapter):
-    """Loads a cached reconstruction ``.mat`` file produced by the original repo."""
+    # Loads a cached reconstruction ``.mat`` file produced by the original repo.
 
     def __init__(
         self,
@@ -49,13 +45,12 @@ class ReferenceOutputAdapter(AlgorithmAdapter):
         self._pattern = _FILENAME_FORMAT[algorithm]
 
     def reconstruct(self, measurement: KTCMeasurement) -> np.ndarray:
-        """Return the published reconstruction for ``measurement.sample``.
-
-        Reads ``reference_outputs/<algo>/level<N>/<file>.mat`` for the level
-        carried by ``measurement``. Falls back to the legacy flat layout
-        (``reference_outputs/<algo>/<file>.mat``) at Level 1 if a per-level
-        directory has not yet been staged.
-        """
+        # Return the published reconstruction for ``measurement.sample``.
+        #
+        # Reads ``reference_outputs/<algo>/level<N>/<file>.mat`` for the level
+        # carried by ``measurement``. Falls back to the legacy flat layout
+        # (``reference_outputs/<algo>/<file>.mat``) at Level 1 if a per-level
+        # directory has not yet been staged.
         idx = _SAMPLE_INDEX.get(measurement.sample)
         if idx is None:
             raise ValueError(f"unsupported sample '{measurement.sample}'")

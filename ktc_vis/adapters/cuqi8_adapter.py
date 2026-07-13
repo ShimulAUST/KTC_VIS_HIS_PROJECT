@@ -1,14 +1,5 @@
-"""CUQI8 algorithm adapter. Owner: Smit Savani.
+# CUQI8 algorithm adapter. Wraps Docker image: muzammal5566/ktc2023-cuqi8:latest
 
-Wraps Docker image: muzammal5566/ktc2023-cuqi8:latest
-
-Container run command:
-    docker run --rm --platform linux/amd64 \
-      -v "<level_dir>:/app/TrainingData" \
-      -v "<output_dir>:/app/Output" \
-      muzammal5566/ktc2023-cuqi8:latest \
-      conda run --no-capture-output -n env python main.py TrainingData Output <level>
-"""
 
 import shutil
 import subprocess
@@ -28,7 +19,7 @@ _SAMPLE_INDEX = {"a": 1, "b": 2, "c": 3}
 
 
 class CUQI8Adapter(AlgorithmAdapter):
-    """Adapter for the CUQI8 (Bayesian/FEniCS-based) reconstruction algorithm."""
+    # Adapter for the CUQI8 (Bayesian/FEniCS-based) reconstruction algorithm.
 
     name = "cuqi8"
     supports_level_batching = True
@@ -40,7 +31,7 @@ class CUQI8Adapter(AlgorithmAdapter):
     def reconstruct_level(
         self, level: int, samples: list[str]
     ) -> dict[str, np.ndarray]:
-        """Run CUQI8 once for the whole level — one docker run covers all samples."""
+        # Run CUQI8 once for the whole level — one docker run covers all samples.
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             training_dir = tmp_path / "TrainingData"
