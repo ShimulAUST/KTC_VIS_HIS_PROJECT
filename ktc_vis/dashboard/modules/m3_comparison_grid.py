@@ -347,15 +347,7 @@ def _bottom_row() -> html.Div:
                         ],
                         style={"marginBottom": "4px"},
                     ),
-                    html.Div(
-                        [
-                            html.Span("Colour", style={
-                                "color": ACCENT, "fontWeight": 700,
-                                "fontSize": "10.5px", "marginRight": "4px",
-                            }),
-                       ],
-                    ),
-                ],
+              ],
                 style={
                     "padding": "8px 14px 12px",
                     "borderTop": f"1px dashed {BORDER}",
