@@ -353,13 +353,7 @@ def _bottom_row() -> html.Div:
                                 "color": ACCENT, "fontWeight": 700,
                                 "fontSize": "10.5px", "marginRight": "4px",
                             }),
-                            html.Span(
-                                "Each bar colour represents one injection: purple = early, "
-                                "yellow = late. Up to 8 injections are evenly sampled from "
-                                "the full set so the chart stays readable.",
-                                style={"color": MUTED, "fontSize": "10.5px"},
-                            ),
-                        ],
+                       ],
                     ),
                 ],
                 style={
