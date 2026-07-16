@@ -1,22 +1,18 @@
 """Lightweight EIT forward surrogate for algorithm-aware measurement metrics.
 
-""Geselowitz sensitivity theorem"" 
-
 We need three measurement-domain metrics in Module 3 that actually depend on the
 reconstruction (not just on the raw measurement). A full FEM forward solver is
 overkill for a dashboard score, so this module implements a **Born / linearised
-sensitivity approximation** on a circular tank:
+sensitivity approximation** on a circular tank, using Geselowitz's sensitivity
+formula from bioimpedance theory (1971):
 
-  δV_pred[k, j] ≈ -∫ ∇φ_inj_k · ∇φ_meas_kj · δσ(x) dx 
-  "Geselowitz's sensitivity formula from bioimpedance theory (1971)"
+  δV_pred[k, j] ≈ -∫ ∇φ_inj_k · ∇φ_meas_kj · δσ(x) dx
 
-where ``φ_e(x) = -1/(2π) log|x - e|``   
-free-space Green's function of the 2D Laplace equation — the logarithmic potential of a point source.
-
-is the free-space log-potential of a unit
-point source at electrode ``e``, evaluated on a 256×256 pixel grid. The
-reconstruction's label map is converted to a signed conductivity perturbation
-``δσ ∈ {-1, 0, +1}`` for (resistive, water, conductive).
+where ``φ_e(x) = -1/(2π) log|x - e|`` is the free-space Green's function of the
+2D Laplace equation — the logarithmic potential of a unit point source at
+electrode ``e``, evaluated on a 256×256 pixel grid. The reconstruction's label
+map is converted to a signed conductivity perturbation ``δσ ∈ {-1, 0, +1}`` for
+(resistive, water, conductive).
 
 This is enough to discriminate algorithms: a good reconstruction produces a
 δV_pred whose per-pattern profile correlates with the measured δV; a degenerate
@@ -91,7 +87,7 @@ def _per_electrode_gradient_field(
     return disk_mask, dphi_dx, dphi_dy
 
 
-def _label_to_contrast(reconstruction: np.ndarray) -> np.ndarray:   #translating the reconstruction into physics
+def _label_to_contrast(reconstruction: np.ndarray) -> np.ndarray:  # translate labels into physics
     """Map label image {0=water, 1=resistive, 2=conductive} → δσ ∈ {-1, 0, +1}."""
     r = np.asarray(reconstruction)
     out = np.zeros(r.shape, dtype=np.float64)

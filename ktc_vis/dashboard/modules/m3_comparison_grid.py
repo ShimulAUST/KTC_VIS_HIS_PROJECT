@@ -35,8 +35,6 @@ from ktc_vis.utils.figures import (
 
 logger = logging.getLogger(__name__)
 
-
- 
 # paths we need to find raw data and the benchmark cache
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _RAW_DIR = _PROJECT_ROOT / "data" / "raw" / "ktc2023"
@@ -119,6 +117,7 @@ _PANEL_HDR = {
 }
 
 # Layout
+
 
 def layout() -> html.Div:
     # Build the full M3 page — three stacked sections from top to bottom.
@@ -245,7 +244,7 @@ def _recon_grid() -> html.Div:
 
 def _diff_grid() -> html.Div:
     panels = []
-    
+
     for a, b in _DIFF_PAIRS:
         label = f"{a.upper()} − {b.upper()}"
         panels.append(
@@ -347,7 +346,7 @@ def _bottom_row() -> html.Div:
                         ],
                         style={"marginBottom": "4px"},
                     ),
-              ],
+                ],
                 style={
                     "padding": "8px 14px 12px",
                     "borderTop": f"1px dashed {BORDER}",
@@ -1147,7 +1146,6 @@ def register_callbacks(app) -> None:  # noqa: ANN001
         return (*recon_figs, *diff_figs, voltage_fig, scorecard, chips, banner)
 
     # full-screen toggle for the voltage chart on double-click
-    
     app.clientside_callback(
         """
         function(relayoutData, isFull) {

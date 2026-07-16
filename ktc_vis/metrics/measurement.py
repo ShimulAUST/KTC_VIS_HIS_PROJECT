@@ -125,7 +125,8 @@ def compute_resistance_consistency(
     if dv_meas.size == 0:
         return 0.5
     dv_pred = _predicted_perturbation(measurement, reconstruction)
-    r = _row_pearson(dv_meas, dv_pred) #_row_pearson() returns an array of Pearson correlation coefficients — one number per injection pattern
+    # _row_pearson returns one Pearson correlation coefficient per injection pattern
+    r = _row_pearson(dv_meas, dv_pred)
     r = r[np.isfinite(r)]
     if r.size == 0:
         return 0.5
