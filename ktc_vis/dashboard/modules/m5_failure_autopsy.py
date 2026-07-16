@@ -173,7 +173,7 @@ def register_callbacks(app) -> None:  # noqa: ANN001
                        "fontStyle": "italic", "fontSize": "13px"},
             )
             return empty, [], _banner(
-                "Cache is empty — diagnostic panels are unavailable.", "error",
+                "Cache is empty diagnostic panels are unavailable.", "error",
             )
 
         if alg_filter and alg_filter != "all":
@@ -278,12 +278,12 @@ def register_callbacks(app) -> None:  # noqa: ANN001
 
         spatial_footer = _spatial_interpretation(ssim_map, metrics.get("ssim"))
         confusion_footer = _confusion_interpretation(cm)
-        boundary_footer = _boundary_interpretation(pred, gt, level)
         try:
             measurement = _LOADER.load(level=level, sample=sample)
             per_inj = _per_injection_perturbation(measurement)
         except Exception:  # noqa: BLE001
             per_inj = None
+        boundary_footer = _boundary_interpretation(pred, gt, level, per_inj=per_inj)
         meas_footer = _measurement_interpretation(per_inj)
 
         return (chips, badge, explanation, thumbs, quick, signals,
@@ -560,25 +560,29 @@ def _diagnostic_grid() -> html.Div:
         ),
         _graph_panel(
             "Boundary Error (polar)",
-            "errors by angle · green = active electrode · gray × = removed",
+            "where errors sit · green = electrode present · gray × = electrode missing",
             _BOUNDARY_ID, badge="∂", badge_color=DANGER,
             footer_id=_BOUNDARY_FOOTER_ID,
             help_text=(
                 "Angular histogram of wrongly classified pixels around the "
-                "tank centre. Tall bars in the gray × arc = blame the data; "
-                "errors spread around the full ring = blame the algorithm."
+                "tank centre. Tall bars in the gray × arc = missing "
+                "electrodes are the cause; tall bars in the green-dot arc "
+                "= algorithm's fault."
             ),
         ),
         _graph_panel(
             "Measurement Perturbation (polar)",
-            "blue = strong signal · red = weakest 25% · yellow dashed = threshold",
+            "signal strength per injection · red = weakest 25% at this level",
             _MEAS_ID, badge="V", badge_color=SUCCESS,
             footer_id=_MEAS_FOOTER_ID,
             help_text=(
-                "For each current injection, how much the inclusion changed "
-                "the boundary voltages versus an empty tank. Red bars carry "
-                "almost no inclusion information — no algorithm can recover "
-                "what was never measured."
+                "For each current injection, how strongly the inclusion "
+                "disturbed the boundary voltages versus an empty tank. "
+                "Bars are NORMALISED per level (raw magnitudes differ by "
+                "orders of magnitude across L1–L7). Red = bottom 25% of "
+                "signal strength at this level. This graph only shows "
+                "electrodes that are still present — the boundary graph "
+                "covers missing electrodes."
             ),
         ),
     ]
@@ -769,9 +773,9 @@ def _reading_guide_card() -> html.Div:
          ACCENT_SOFT),
         ("2", "Confusion Matrix", "WHAT kind of mistake was made?",
          "#a07bff"),
-        ("3", "Boundary (polar)", "Was the data sparse around that angle?",
+        ("3", "Boundary (polar)", "Are ELECTRODES missing at that angle?",
          DANGER),
-        ("4", "Measurement (polar)", "Did the injections even carry signal?",
+        ("4", "Measurement (polar)", "Is the SIGNAL weak from that angle?",
          SUCCESS),
     ]
     cells = []
@@ -882,42 +886,40 @@ def _spatial_interpretation(ssim_map: np.ndarray, ssim_score: float | None) -> h
     if arr.size == 0:
         return _interpretation_placeholder("Spatial SSIM map is empty.")
 
-    bad_mask = arr < 0
+    # Threshold: local SSIM < 0.5 = pixel notably disagrees with GT.
+    # (An earlier version used < 0, which for ternary masks never triggers
+    #  because local SSIM stays positive even when the label is wrong —
+    #  it made the footer say "0% wrong pixels" for cases with visible failure.)
+    bad_mask = arr < 0.5
     bad_pct = 100.0 * bad_mask.sum() / arr.size
 
-    if bad_pct < 0.5:
-        verdict = (f"Almost the whole image agrees with ground truth "
-                   f"({bad_pct:.1f}% red pixels). Errors are negligible.")
+    if bad_pct < 1.0:
+        verdict = f"SSIM heatmap is clean ({bad_pct:.1f}% weak-similarity pixels)."
         accent = SUCCESS
     else:
-        # Centroid of red region (image coords: row 0 at top).
         rows, cols = np.where(bad_mask)
         if rows.size > 0:
-            cy = rows.mean() / arr.shape[0]   # 0..1, 0=top
-            cx = cols.mean() / arr.shape[1]   # 0..1, 0=left
+            cy = rows.mean() / arr.shape[0]
+            cx = cols.mean() / arr.shape[1]
             vert = "top" if cy < 0.4 else ("bottom" if cy > 0.6 else "middle")
             horiz = "left" if cx < 0.4 else ("right" if cx > 0.6 else "centre")
             location = (f"{vert}-{horiz}" if vert != "middle" or horiz != "centre"
-                        else "centre of the tank")
+                        else "centre")
         else:
             location = "the tank"
 
-        if bad_pct < 3:
-            verdict = (f"{bad_pct:.1f}% of pixels disagree with GT, "
-                       f"localised near the {location}. Small, focused error.")
+        if bad_pct < 5:
+            verdict = f"Small bad region ({bad_pct:.1f}%) near the {location}."
             accent = SUCCESS
-        elif bad_pct < 12:
-            verdict = (f"{bad_pct:.1f}% of pixels disagree with GT, "
-                       f"clustered near the {location}. Moderate, focused error.")
+        elif bad_pct < 20:
+            verdict = f"Moderate bad region ({bad_pct:.1f}%) near the {location}."
             accent = WARN
         else:
-            verdict = (f"{bad_pct:.1f}% of pixels disagree with GT, "
-                       f"largest red region near the {location}. "
-                       f"Wide-area failure.")
+            verdict = f"Large bad region ({bad_pct:.1f}%), worst near the {location}."
             accent = DANGER
 
     if ssim_score is not None:
-        verdict += f"  Overall SSIM = {float(ssim_score):.3f}."
+        verdict += f" SSIM = {float(ssim_score):.2f}."
     return _interpretation_block("Reading", verdict, accent=accent)
 
 
@@ -935,9 +937,7 @@ def _confusion_interpretation(cm: np.ndarray) -> html.Div:
     if off.max() <= 0:
         return _interpretation_block(
             "Reading",
-            "Diagonal-only — every pixel is in the correct class. "
-            f"Per-class accuracy: water {diag[0] * 100:.0f}%, "
-            f"resistive {diag[1] * 100:.0f}%, conductive {diag[2] * 100:.0f}%.",
+            "Every pixel is in the correct class.",
             accent=SUCCESS,
         )
 
@@ -946,24 +946,44 @@ def _confusion_interpretation(cm: np.ndarray) -> html.Div:
 
     # Tag the failure family of the dominant off-diagonal.
     if labels[i] == "water":
-        family = "ghost — pixels invented where there is nothing"
+        family = "ghost (invented inclusion)"
         accent = DANGER
     elif labels[j] == "water":
-        family = "missing — pixels erased where an inclusion exists"
+        family = "missing (erased inclusion)"
         accent = WARN
     else:
-        family = "class flip — resistive vs conductive swapped"
+        family = "class flip (resistive ↔ conductive)"
         accent = "#a07bff"
 
-    body = (f"Biggest single error: {cell * 100:.1f}% of {labels[i]} pixels were "
-            f"predicted as {labels[j]} → {family}.")
-    if cell >= 0.20:
-        body += "  This is a dominant failure mode for this case."
+    body = (f"Biggest mistake: {cell * 100:.1f}% of {labels[i]} pixels called "
+            f"{labels[j]} → {family}.")
     return _interpretation_block("Reading", body, accent=accent)
 
 
+def _weak_strong_ratio(per_inj: np.ndarray) -> float:
+    """Weakest-quartile mean / strongest-quartile mean. 1.0 = flat, 0.0 = starved."""
+    arr = np.asarray(per_inj, dtype=float)
+    if arr.size == 0:
+        return 1.0
+    q25 = float(np.percentile(arr, 25))
+    q75 = float(np.percentile(arr, 75))
+    weak_slice = arr[arr <= q25]
+    strong_slice = arr[arr >= q75]
+    weak_mean = float(weak_slice.mean()) if weak_slice.size else 0.0
+    strong_mean = float(strong_slice.mean()) if strong_slice.size else 1.0
+    return (weak_mean / strong_mean) if strong_mean > 1e-9 else 1.0
+
+
+# When ratio >= this, every injection carries similar signal — red bars
+# and "weak-signal" verdicts are misleading and should be suppressed.
+_MEANINGFUL_GAP_RATIO = 0.6
+
+
 def _boundary_interpretation(
-    pred: np.ndarray, gt: np.ndarray, level: int,
+    pred: np.ndarray,
+    gt: np.ndarray,
+    level: int,
+    per_inj: np.ndarray | None = None,
 ) -> html.Div:
     # Compare error-angle distribution against the removed-electrode arc.
     pred_arr = np.asarray(pred)
@@ -1000,30 +1020,83 @@ def _boundary_interpretation(
     peak_share = 100.0 * hist[peak_bin] / total_err
 
     if level <= 1:
-        body = (f"All {n_total} electrodes active. Error peaks around "
-                f"{peak_deg:.0f}° ({peak_share:.0f}% of all error pixels). "
-                f"No data-side blind arc — this is algorithm-side.")
-        accent = "#a07bff"
+        # No missing-electrode arc exists. Two remaining suspects:
+        # (a) physics — errors sit at weak-signal angles, or
+        # (b) algorithm — errors sit at strong-signal angles.
+        physics_share = _weak_signal_error_share(angles, per_inj)
+        ratio = _weak_strong_ratio(per_inj) if per_inj is not None else 1.0
+        if ratio < _MEANINGFUL_GAP_RATIO and physics_share >= 0.5:
+            body = (f"Errors peak at {peak_deg:.0f}°, where the signal is "
+                    f"weak ({physics_share * 100:.0f}% of errors sit at "
+                    f"weak-signal angles). Physics-side — the inclusion is "
+                    f"nearly invisible from that angle.")
+            accent = WARN
+        else:
+            body = (f"Errors peak at {peak_deg:.0f}°. All electrodes present "
+                    f"and signal is strong there — algorithm's fault.")
+            accent = "#a07bff"
     elif removed_pct >= 1.5 * expected_pct and removed_pct >= 25:
-        body = (f"{removed_pct:.0f}% of errors fall in the removed-electrode "
-                f"arc (≈{expected_pct:.0f}% expected by area). "
-                f"Data-side limitation dominates this failure.")
+        body = (f"{removed_pct:.0f}% of errors sit in the missing-electrode "
+                f"arc (only {expected_pct:.0f}% expected). Missing electrodes "
+                f"are the cause.")
         accent = DANGER
     elif removed_pct <= expected_pct * 0.6:
-        body = (f"Only {removed_pct:.0f}% of errors land in the removed "
-                f"arc ({expected_pct:.0f}% expected). Error peaks at "
-                f"{peak_deg:.0f}° — algorithm-side, not data-sparsity.")
-        accent = "#a07bff"
+        # Errors are inside the active-electrode region. Check physics before
+        # blaming the algorithm.
+        physics_share = _weak_signal_error_share(angles, per_inj)
+        ratio = _weak_strong_ratio(per_inj) if per_inj is not None else 1.0
+        if ratio < _MEANINGFUL_GAP_RATIO and physics_share >= 0.5:
+            body = (f"Errors peak at {peak_deg:.0f}°, where electrodes ARE "
+                    f"present but signal is weak ({physics_share * 100:.0f}% "
+                    f"of errors sit at weak-signal angles). Physics-side.")
+            accent = WARN
+        else:
+            body = (f"Errors peak at {peak_deg:.0f}°, where electrodes ARE "
+                    f"present and signal is strong. Algorithm's fault.")
+            accent = "#a07bff"
     else:
-        body = (f"Errors spread fairly evenly around the ring; "
-                f"{removed_pct:.0f}% in the removed arc vs "
-                f"{expected_pct:.0f}% expected. Mixed cause.")
+        body = (f"Errors spread around the ring ({removed_pct:.0f}% in the "
+                f"missing-electrode arc vs {expected_pct:.0f}% expected). "
+                f"Mixed cause — partly hardware, partly algorithm.")
         accent = WARN
     return _interpretation_block("Reading", body, accent=accent)
 
 
+def _weak_signal_error_share(
+    err_angles: np.ndarray,
+    per_inj: np.ndarray | None,
+    tol_deg: float = 15.0,
+) -> float:
+    """Fraction of error pixels whose angle is within ``tol_deg`` of any
+    weak-signal (bottom-quartile) injection.
+
+    Returns 0.0 if there are no error angles, no injections, or the
+    injection set has no meaningful weak/strong gap.
+    """
+    if per_inj is None or len(err_angles) == 0:
+        return 0.0
+    arr = np.asarray(per_inj, dtype=float)
+    if arr.size == 0:
+        return 0.0
+    q25 = float(np.percentile(arr, 25))
+    weak_idx = np.where(arr <= q25)[0]
+    if weak_idx.size == 0:
+        return 0.0
+    weak_angles = (weak_idx / arr.size) * 360.0
+    # Circular distance from each error angle to nearest weak angle.
+    diff = np.abs(err_angles[:, None] - weak_angles[None, :])
+    diff = np.minimum(diff, 360.0 - diff)
+    return float((diff.min(axis=1) <= tol_deg).sum()) / len(err_angles)
+
+
 def _measurement_interpretation(per_inj: np.ndarray | None) -> html.Div:
     # Describe how much of the measurement set is starved of inclusion signal.
+    #
+    # NOTE: this graph only shows the injections that were actually made
+    # (i.e. from the ACTIVE electrodes at this level). Removed electrodes
+    # contribute nothing — their blind angles are the boundary graph's job.
+    # Wording below is careful not to over-claim "algorithm-side" the way
+    # the boundary graph legitimately claims "data-side" for the removed arc.
     if per_inj is None:
         return _interpretation_placeholder("Could not load raw measurements.")
 
@@ -1031,41 +1104,49 @@ def _measurement_interpretation(per_inj: np.ndarray | None) -> html.Div:
     if arr.size == 0:
         return _interpretation_placeholder("No per-injection values available.")
 
-    threshold = float(np.percentile(arr, 25))
-    weak = arr < threshold
-    weak_pct = 100.0 * weak.sum() / arr.size
-
-    rng = float(arr.max() - arr.min())
-    med = float(np.median(arr))
-    contrast = (rng / med) if med > 1e-9 else 0.0
-
-    # Angular position of weak injections (assume evenly spread around 360°).
     n = arr.size
-    weak_idx = np.where(weak)[0]
-    if weak_idx.size:
-        weak_angles = (weak_idx / n) * 360.0
-        ang_mean = float(weak_angles.mean())
-        ang_spread = float(weak_angles.max() - weak_angles.min())
-        location = (f"clustered near {ang_mean:.0f}°"
-                    if ang_spread < 90 else "spread around the ring")
-    else:
-        location = "n/a"
 
-    if contrast < 0.15:
-        body = (f"Signal is nearly flat ({contrast * 100:.0f}% peak-to-median "
-                f"contrast). Most injections carry little inclusion info; "
-                f"algorithms have very thin data to work with.")
+    # Weak / strong ratio: mean of bottom quartile ÷ mean of top quartile.
+    # 1.0 = perfectly flat signal, 0.0 = weakest injections are totally starved.
+    # (This replaces the earlier `weak_pct >= 30` check, which was tautological
+    #  because np.percentile(arr, 25) makes weak_pct always ≈25% by construction.)
+    q25_val = float(np.percentile(arr, 25))
+    q75_val = float(np.percentile(arr, 75))
+    weak_slice = arr[arr <= q25_val]
+    strong_slice = arr[arr >= q75_val]
+    weak_mean = float(weak_slice.mean()) if weak_slice.size else 0.0
+    strong_mean = float(strong_slice.mean()) if strong_slice.size else 1.0
+    ratio = (weak_mean / strong_mean) if strong_mean > 1e-9 else 1.0
+
+    # Where the weak injections sit angularly, using the smallest arc that
+    # contains them all (proper circular measure, not min-max of indices).
+    weak_idx = np.where(arr <= q25_val)[0]
+    ang_mean = 0.0
+    if weak_idx.size:
+        weak_angles = np.sort((weak_idx / n) * 360.0)
+        gaps = np.diff(np.concatenate([weak_angles, [weak_angles[0] + 360.0]]))
+        arc_span = 360.0 - float(gaps.max())
+        clustered = arc_span < 120.0
+        ang_mean = float(weak_angles.mean())
+    else:
+        clustered = False
+
+    if ratio >= 0.6 and not clustered:
+        body = (f"All {n} injections carry similar signal strength "
+                f"(weak/strong ratio = {ratio:.2f}). No weak-signal direction.")
+        accent = SUCCESS
+    elif clustered and ratio < 0.5:
+        body = (f"Weakest injections cluster near {ang_mean:.0f}° "
+                f"(ratio = {ratio:.2f}). Signal is thin from that side.")
         accent = DANGER
-    elif weak_pct >= 30:
-        body = (f"{weak_pct:.0f}% of injections are below the weak-signal "
-                f"threshold ({location}). Reconstruction near those angles "
-                f"is data-limited.")
+    elif ratio < 0.4:
+        body = (f"Big gap between weak and strong injections "
+                f"(ratio = {ratio:.2f}). Uneven signal across directions.")
         accent = WARN
     else:
-        body = (f"Healthy signal — only {weak_pct:.0f}% of injections fall "
-                f"below the P25 weak line ({location}). Algorithm had usable "
-                f"data; any failure is algorithm-side.")
-        accent = SUCCESS
+        body = (f"Moderate signal spread (ratio = {ratio:.2f}). "
+                f"Signal strength varies somewhat by direction.")
+        accent = WARN
     return _interpretation_block("Reading", body, accent=accent)
 
 
@@ -1776,11 +1857,15 @@ def _boundary_radial_figure(
         width=[360 / n_bins] * n_bins,
         marker=dict(
             color=counts,
-            colorscale=[[0.0, "#1e1e2f"], [0.5, "#f4c870"], [1.0, "#e85d75"]],
-            line=dict(color="#1e1e2f", width=0.5),
+            colorscale=[[0.0, "#2a2a4a"], [0.35, "#f4c870"], [1.0, "#e85d75"]],
+            line=dict(color="rgba(255,255,255,0.10)", width=0.6),
         ),
-        hovertemplate="θ=%{theta:.0f}°<br>errors=%{r}<extra></extra>",
-        name="Error count",
+        hovertemplate=(
+            "angle: %{theta:.0f}°<br>"
+            "wrong pixels in this 10° wedge: %{r}"
+            "<extra></extra>"
+        ),
+        name="error pixels per 10°",
     ))
 
     # Removed electrodes (faint gray X marks)
@@ -1792,7 +1877,7 @@ def _boundary_radial_figure(
             marker=dict(size=10, color="rgba(154,160,180,0.55)",
                         symbol="x-thin",
                         line=dict(color="#9aa0b4", width=1.4)),
-            name="Removed electrode",
+            name=f"removed electrode ({len(removed_angles)})",
             hovertemplate="removed @ %{theta:.0f}°<extra></extra>",
         ))
 
@@ -1803,28 +1888,38 @@ def _boundary_radial_figure(
         mode="markers",
         marker=dict(size=11, color=SUCCESS, symbol="circle",
                     line=dict(color="#0a0a18", width=1.0)),
-        name=f"Active electrode ({len(active_angles)})",
+        name=f"active electrode ({len(active_angles)})",
         hovertemplate="electrode @ %{theta:.0f}°<extra></extra>",
     ))
 
+    cardinal = [0, 45, 90, 135, 180, 225, 270, 315]
     fig.update_layout(
         paper_bgcolor=CARD,
         polar=dict(
             bgcolor="#14142a",
-            radialaxis=dict(tickfont=dict(color=MUTED, size=9),
-                            gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                            angle=90, tickangle=90,
-                            range=[0, r_axis_max]),
-            angularaxis=dict(tickfont=dict(color=TEXT, size=10),
-                             gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                             direction="counterclockwise", rotation=0),
+            radialaxis=dict(
+                tickfont=dict(color=MUTED, size=11),
+                gridcolor="#2a2a4a", linecolor="#2a2a4a",
+                angle=90, tickangle=90,
+                range=[0, r_axis_max],
+                nticks=4,
+                title=dict(text="error pixels",
+                           font=dict(color=MUTED, size=10)),
+            ),
+            angularaxis=dict(
+                tickfont=dict(color=TEXT, size=11),
+                gridcolor="#2a2a4a", linecolor="#2a2a4a",
+                direction="counterclockwise", rotation=0,
+                tickmode="array", tickvals=cardinal,
+                ticktext=[f"{a}°" for a in cardinal],
+            ),
         ),
         showlegend=True,
-        legend=dict(font=dict(color=TEXT, size=11),
-                    bgcolor="rgba(0,0,0,0.45)",
+        legend=dict(font=dict(color=TEXT, size=10.5),
+                    bgcolor="rgba(0,0,0,0.5)",
                     bordercolor=BORDER, borderwidth=1,
-                    orientation="h", x=0.5, xanchor="center", y=-0.08),
-        margin=dict(l=20, r=20, t=10, b=40),
+                    orientation="h", x=0.5, xanchor="center", y=-0.10),
+        margin=dict(l=30, r=30, t=24, b=54),
         uirevision="m5-boundary",
     )
     return fig
@@ -1837,9 +1932,16 @@ def _measurement_residual_figure(
     gt: np.ndarray,
 ) -> go.Figure:
     # Per-injection inclusion-vs-reference voltage energy.
+    #
+    # Bar heights are NORMALISED per level (each divided by that level's max)
+    # so shapes are visually comparable across L1..L7. This is important
+    # because the raw magnitude of ‖ΔV‖ differs by ~2 orders of magnitude
+    # between L1 (true empty-tank subtraction) and L2+ (mean-fallback
+    # subtraction). The percentile threshold (red vs blue) is unaffected by
+    # normalisation — it's rank-based.
     try:
         measurement = _LOADER.load(level=level, sample=sample)
-        per_inj = _per_injection_perturbation(measurement)
+        per_inj_raw = _per_injection_perturbation(measurement)
     except Exception as exc:  # pragma: no cover - surfaced to UI
         logger.warning("M5 measurement residual unavailable: %s", exc)
         fig = go.Figure()
@@ -1853,30 +1955,49 @@ def _measurement_residual_figure(
                           uirevision="m5-meas")
         return fig
 
-    n = len(per_inj)
+    n = len(per_inj_raw)
+    if n == 0:
+        return empty_figure("No measurements")
+
+    peak = float(per_inj_raw.max()) if per_inj_raw.max() > 0 else 1.0
+    per_inj = per_inj_raw / peak  # normalised bar heights in [0, 1]
     angles = np.linspace(0.0, 360.0, n, endpoint=False)
 
-    # Weak-signal threshold = 25th percentile of per-injection perturbation.
-    # This is robust across levels: at L1 ref subtraction is exact; at L2-L7
-    if n:
-        threshold = float(np.percentile(per_inj, 25))
-    else:
-        threshold = 0.0
+    # Only paint bars red / draw the P25 line when there is a meaningful
+    # weak/strong gap. Otherwise red would just mark the bottom 25% of an
+    # already-flat distribution, which is misleading.
+    ratio = _weak_strong_ratio(per_inj_raw)
+    meaningful_gap = ratio < _MEANINGFUL_GAP_RATIO
+    threshold = float(np.percentile(per_inj, 25)) if n else 0.0
 
-    colors = ["#e85d75" if v <= threshold else "#5b8def" for v in per_inj]
+    if meaningful_gap:
+        colors = ["#e85d75" if v <= threshold else "#5b8def" for v in per_inj]
+    else:
+        colors = ["#5b8def"] * n  # all blue — no meaningful weak direction
+    custom = np.stack([per_inj_raw, per_inj], axis=-1)
 
     fig = go.Figure()
     fig.add_trace(go.Barpolar(
         r=per_inj,
         theta=angles,
         width=[360 / max(n, 1)] * n,
-        marker=dict(color=colors, line=dict(color="#1e1e2f", width=0.4)),
-        hovertemplate=("injection %{theta:.0f}°<br>"
-                       "‖ΔV‖=%{r:.4f}<extra></extra>"),
-        name="‖V − V_ref‖",
+        marker=dict(
+            color=colors,
+            line=dict(color="rgba(255,255,255,0.12)", width=0.6),
+        ),
+        customdata=custom,
+        hovertemplate=(
+            "angle: %{theta:.0f}°<br>"
+            "signal: %{r:.2f} (bar height, 0–1)<br>"
+            "raw ‖ΔV‖: %{customdata[0]:.4f}"
+            "<extra></extra>"
+        ),
+        name=("signal (normalised per level)" if meaningful_gap
+              else f"all injections similar (ratio = {ratio:.2f})"),
     ))
-    # Threshold ring — drawn AFTER the bars so it sits on top of them.
-    if threshold > 0 and n:
+
+    # Threshold ring — only draw it when the red bars are meaningful.
+    if meaningful_gap and threshold > 0:
         ring_theta = np.linspace(0, 360, 180)
         fig.add_trace(go.Scatterpolar(
             r=[threshold] * len(ring_theta),
@@ -1884,26 +2005,38 @@ def _measurement_residual_figure(
             mode="lines",
             line=dict(color=WARN, width=2.0, dash="dash"),
             hoverinfo="skip",
-            name=f"weak-signal threshold (P25 = {threshold:.3f})",
+            name="weak-signal line (bottom 25% at this level)",
         ))
 
+    cardinal = [0, 45, 90, 135, 180, 225, 270, 315]
     fig.update_layout(
         paper_bgcolor=CARD,
         polar=dict(
             bgcolor="#14142a",
-            radialaxis=dict(tickfont=dict(color=MUTED, size=9),
-                            gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                            angle=90, tickangle=90),
-            angularaxis=dict(tickfont=dict(color=TEXT, size=10),
-                             gridcolor="#2a2a4a", linecolor="#2a2a4a",
-                             direction="counterclockwise", rotation=0),
+            radialaxis=dict(
+                tickfont=dict(color=MUTED, size=11),
+                gridcolor="#2a2a4a", linecolor="#2a2a4a",
+                angle=90, tickangle=90,
+                range=[0, 1.08],
+                nticks=5,
+                tickformat=".1f",
+                title=dict(text="signal (0–1)",
+                           font=dict(color=MUTED, size=10)),
+            ),
+            angularaxis=dict(
+                tickfont=dict(color=TEXT, size=11),
+                gridcolor="#2a2a4a", linecolor="#2a2a4a",
+                direction="counterclockwise", rotation=0,
+                tickmode="array", tickvals=cardinal,
+                ticktext=[f"{a}°" for a in cardinal],
+            ),
         ),
         showlegend=True,
-        legend=dict(font=dict(color=TEXT, size=11),
-                    bgcolor="rgba(0,0,0,0.45)",
+        legend=dict(font=dict(color=TEXT, size=10.5),
+                    bgcolor="rgba(0,0,0,0.5)",
                     bordercolor=BORDER, borderwidth=1,
-                    orientation="h", x=0.5, xanchor="center", y=-0.08),
-        margin=dict(l=20, r=20, t=10, b=40),
+                    orientation="h", x=0.5, xanchor="center", y=-0.10),
+        margin=dict(l=30, r=30, t=24, b=54),
         uirevision="m5-meas",
     )
     return fig
