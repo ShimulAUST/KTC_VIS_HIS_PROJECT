@@ -930,7 +930,6 @@ def _confusion_interpretation(cm: np.ndarray) -> html.Div:
         return _interpretation_placeholder("Confusion matrix has unexpected shape.")
 
     labels = ["water", "resistive", "conductive"]
-    diag = np.diag(arr).copy()
     off = arr.copy()
     np.fill_diagonal(off, 0.0)
 
@@ -1017,7 +1016,6 @@ def _boundary_interpretation(
     hist, edges = np.histogram(angles, bins=36, range=(0, 360))
     peak_bin = int(np.argmax(hist))
     peak_deg = (edges[peak_bin] + edges[peak_bin + 1]) / 2.0
-    peak_share = 100.0 * hist[peak_bin] / total_err
 
     if level <= 1:
         # No missing-electrode arc exists. Two remaining suspects:
