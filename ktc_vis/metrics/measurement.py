@@ -1,6 +1,4 @@
-"""Measurement-domain metrics. Owner: Smit Savani.
-
-These three scalars summarise how well an algorithm's reconstruction *explains*
+"""These three scalars summarise how well an algorithm's reconstruction *explains*
 the measured voltages, evaluated with a lightweight Born / linearised forward
 surrogate (see :mod:`ktc_vis.metrics._voltage_surrogate`). Because they depend
 on the reconstruction they vary per algorithm — distinguishing ABC1, CUQI8 and
@@ -127,7 +125,7 @@ def compute_resistance_consistency(
     if dv_meas.size == 0:
         return 0.5
     dv_pred = _predicted_perturbation(measurement, reconstruction)
-    r = _row_pearson(dv_meas, dv_pred)
+    r = _row_pearson(dv_meas, dv_pred) #_row_pearson() returns an array of Pearson correlation coefficients — one number per injection pattern
     r = r[np.isfinite(r)]
     if r.size == 0:
         return 0.5
